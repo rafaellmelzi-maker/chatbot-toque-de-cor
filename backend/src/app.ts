@@ -31,9 +31,25 @@ export function createApp(): { app: Application; httpServer: ReturnType<typeof c
       crossOriginEmbedderPolicy: false,
     }),
   );
+  const allowedOrigins = [
+    env.FRONTEND_URL,
+    'http://localhost:3000',
+    'http://localhost:5173',
+  ];
+
   app.use(
     cors({
-      origin: [env.FRONTEND_URL, 'http://localhost:3000', 'http://localhost:5173'],
+      origin: (origin, callback) => {
+        // Permite requests sem origin (ex: mobile apps, curl, Postman)
+        if (!origin) return callback(null, true);
+        // Permite domínios configurados, Vercel e Railway preview deploys
+        const isAllowed =
+          allowedOrigins.includes(origin) ||
+          /\.vercel\.app$/.test(origin) ||
+          /\.railway\.app$/.test(origin) ||
+          /\.up\.railway\.app$/.test(origin);
+        callback(isAllowed ? null : new Error('CORS not allowed'), isAllowed);
+      },
       credentials: true,
       methods: ['GET', 'POST', 'PUT', 'PATCH', 'DELETE', 'OPTIONS'],
       allowedHeaders: ['Content-Type', 'Authorization', 'x-tenant-id', 'x-request-id'],

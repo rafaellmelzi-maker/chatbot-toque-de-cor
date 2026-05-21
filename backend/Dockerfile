@@ -17,11 +17,12 @@ RUN npm ci --omit=dev
 COPY --from=builder /app/dist ./dist
 COPY --from=builder /app/node_modules/.prisma ./node_modules/.prisma
 COPY prisma ./prisma
+COPY entrypoint.sh ./entrypoint.sh
 
-RUN mkdir -p uploads logs
+RUN mkdir -p uploads logs && chmod +x entrypoint.sh
 
 EXPOSE 3001
-CMD ["node", "dist/server.js"]
+CMD ["sh", "entrypoint.sh"]
 
 # ── Development ───────────────────────────────────────────────
 FROM node:20-alpine AS development
