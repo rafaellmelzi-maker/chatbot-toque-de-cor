@@ -53,7 +53,7 @@ export class ProductService {
 
   async create(tenantId: string, data: object) {
     const product = await prisma.product.create({
-      data: { tenantId, ...(data as Parameters<typeof prisma.product.create>[0]['data']) },
+      data: { tenantId, ...(data as any) },
       include: { category: true, brand: true },
     });
 

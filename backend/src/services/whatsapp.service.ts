@@ -6,7 +6,7 @@ import { env } from '../config/env';
 const EVOLUTION_BASE = env.EVOLUTION_API_URL;
 const EVOLUTION_KEY = env.EVOLUTION_API_KEY;
 
-async function evolutionFetch(path: string, options: RequestInit = {}) {
+async function evolutionFetch(path: string, options: RequestInit = {}): Promise<any> {
   const res = await fetch(`${EVOLUTION_BASE}${path}`, {
     ...options,
     headers: {

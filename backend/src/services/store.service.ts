@@ -23,7 +23,7 @@ export class StoreService {
   }
 
   async create(tenantId: string, data: object) {
-    return prisma.store.create({ data: { tenantId, ...(data as Record<string, unknown>) } });
+    return prisma.store.create({ data: { tenantId, ...(data as any) } });
   }
 
   async update(id: string, tenantId: string, data: object) {

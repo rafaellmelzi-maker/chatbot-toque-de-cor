@@ -23,6 +23,7 @@ const envSchema = z.object({
 
   EVOLUTION_API_URL: z.string().default('http://localhost:8080'),
   EVOLUTION_API_KEY: z.string().optional(),
+  BACKEND_URL: z.string().optional(),
 
   WEBHOOK_SECRET: z.string().optional(),
 
