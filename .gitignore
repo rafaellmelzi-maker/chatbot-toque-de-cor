@@ -1,0 +1,47 @@
+# Dependências
+node_modules/
+dist/
+build/
+.next/
+
+# Ambiente
+.env
+.env.local
+.env.production
+
+# Logs
+*.log
+logs/
+npm-debug.log*
+
+# Cache
+.cache/
+.parcel-cache/
+
+# Editor
+.vscode/
+.idea/
+*.swp
+*.swo
+
+# OS
+.DS_Store
+Thumbs.db
+
+# Docker volumes locais
+postgres_data/
+redis_data/
+
+# Uploads (guardar apenas a pasta, não os arquivos)
+backend/uploads/*
+!backend/uploads/.gitkeep
+
+# Prisma
+backend/prisma/migrations/*.sql
+
+# Coverage
+coverage/
+.nyc_output/
+
+# Build frontend
+frontend/dist/

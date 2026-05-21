@@ -1,0 +1,36 @@
+<!DOCTYPE html>
+<html lang="pt-BR">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>Chat Demo – Toque de Cor</title>
+  <style>
+    body { margin: 0; font-family: 'Inter', sans-serif; background: #f1f5f9; display: flex; align-items: center; justify-content: center; min-height: 100vh; }
+    .demo-card { background: white; border-radius: 16px; padding: 40px; max-width: 560px; text-align: center; box-shadow: 0 8px 40px rgba(0,0,0,0.08); }
+    h1 { font-size: 1.6rem; font-weight: 700; color: #1e293b; }
+    p { color: #64748b; line-height: 1.6; margin-top: 12px; }
+    .badge { display: inline-block; background: #fef2f2; color: #E63946; border-radius: 20px; padding: 4px 14px; font-size: 0.8rem; font-weight: 600; margin-bottom: 16px; }
+  </style>
+</head>
+<body>
+  <div class="demo-card">
+    <span class="badge">Widget Demo</span>
+    <h1>🎨 Assistente Toque de Cor</h1>
+    <p>Clique no ícone de chat no canto inferior direito para iniciar uma conversa com nosso assistente de vendas.</p>
+    <p style="font-size:0.85rem;color:#94a3b8;margin-top:24px;">Este é um ambiente de demonstração. O widget pode ser integrado a qualquer site copiando o script abaixo.</p>
+    <pre style="background:#f8fafc;border:1px solid #e2e8f0;border-radius:8px;padding:16px;text-align:left;font-size:0.75rem;margin-top:20px;overflow-x:auto;"><code>&lt;script&gt;
+  window.ToqueDeCor = { apiUrl: 'https://seudominio.com', storeId: 'ID_DA_LOJA' };
+&lt;/script&gt;
+&lt;script src="https://seudominio.com/widget/chat-widget.js" defer&gt;&lt;/script&gt;</code></pre>
+  </div>
+
+  <link rel="stylesheet" href="chat-widget.css" />
+  <script>
+    window.ToqueDeCor = {
+      apiUrl: window.location.origin,
+      storeId: null,  // será resolvido automaticamente pelo backend
+    };
+  </script>
+  <script src="chat-widget.js" defer></script>
+</body>
+</html>
