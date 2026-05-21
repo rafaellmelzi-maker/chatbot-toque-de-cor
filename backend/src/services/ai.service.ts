@@ -10,7 +10,7 @@ import {
 } from '../ai/prompts';
 import { formatPaintCalculation } from '../utils/paintCalculator';
 
-interface SessionData {
+export interface SessionData {
   surface?: string;
   environment?: string;
   area?: number;
@@ -20,6 +20,7 @@ interface SessionData {
   projectType?: string;
   surfaceState?: string;
   customerName?: string;
+  [key: string]: unknown;
 }
 
 interface IntentAnalysis {
