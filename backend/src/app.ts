@@ -13,6 +13,7 @@ import { apiRouter } from './routes';
 
 export function createApp(): { app: Application; httpServer: ReturnType<typeof createServer>; io: SocketServer } {
   const app = express();
+  app.set('trust proxy', 1);
   const httpServer = createServer(app);
 
   // ── Socket.IO ──────────────────────────────────────────────
