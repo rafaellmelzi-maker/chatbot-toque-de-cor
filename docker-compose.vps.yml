@@ -1,0 +1,119 @@
+version: '3.9'
+
+# ============================================================
+# docker-compose.vps.yml — Deploy em VPS único (DigitalOcean)
+# Sem SSL — usar com IP direto ou atrás de Cloudflare proxy
+# Uso: docker compose -f docker-compose.vps.yml up -d
+# ============================================================
+
+services:
+  # ── Banco de dados ─────────────────────────────────────────
+  postgres:
+    image: pgvector/pgvector:pg16
+    container_name: tc_postgres
+    restart: unless-stopped
+    environment:
+      POSTGRES_USER: ${POSTGRES_USER:-toque_user}
+      POSTGRES_PASSWORD: ${POSTGRES_PASSWORD}
+      POSTGRES_DB: ${POSTGRES_DB:-toque_de_cor_db}
+    volumes:
+      - postgres_data:/var/lib/postgresql/data
+      - ./backend/prisma/init.sql:/docker-entrypoint-initdb.d/init.sql
+    healthcheck:
+      test: ['CMD-SHELL', 'pg_isready -U ${POSTGRES_USER:-toque_user}']
+      interval: 10s
+      timeout: 5s
+      retries: 5
+    networks:
+      - tc_network
+
+  # ── Cache / Filas ──────────────────────────────────────────
+  redis:
+    image: redis:7-alpine
+    container_name: tc_redis
+    restart: unless-stopped
+    command: redis-server --save 60 1 --loglevel warning
+    volumes:
+      - redis_data:/data
+    healthcheck:
+      test: ['CMD', 'redis-cli', 'ping']
+      interval: 10s
+      timeout: 5s
+      retries: 3
+    networks:
+      - tc_network
+
+  # ── Backend API ────────────────────────────────────────────
+  backend:
+    build:
+      context: ./backend
+      dockerfile: Dockerfile
+      target: production
+    container_name: tc_backend
+    restart: unless-stopped
+    depends_on:
+      postgres:
+        condition: service_healthy
+      redis:
+        condition: service_healthy
+    environment:
+      NODE_ENV: production
+      PORT: 3001
+      DATABASE_URL: postgresql://${POSTGRES_USER:-toque_user}:${POSTGRES_PASSWORD}@postgres:5432/${POSTGRES_DB:-toque_de_cor_db}
+      REDIS_URL: redis://redis:6379
+      JWT_SECRET: ${JWT_SECRET}
+      JWT_REFRESH_SECRET: ${JWT_REFRESH_SECRET}
+      OPENAI_API_KEY: ${OPENAI_API_KEY:-placeholder_adicione_depois}
+      EVOLUTION_API_URL: http://evolution:8080
+      EVOLUTION_API_KEY: ${EVOLUTION_API_KEY:-mudar123}
+      WEBHOOK_SECRET: ${WEBHOOK_SECRET}
+      FRONTEND_URL: ${FRONTEND_URL:-http://localhost:3000}
+      LOG_LEVEL: info
+    volumes:
+      - uploads_data:/app/uploads
+    networks:
+      - tc_network
+
+  # ── WhatsApp (Evolution API) ───────────────────────────────
+  evolution:
+    image: atendai/evolution-api:latest
+    container_name: tc_evolution
+    restart: unless-stopped
+    environment:
+      SERVER_URL: http://evolution:8080
+      AUTHENTICATION_API_KEY: ${EVOLUTION_API_KEY:-mudar123}
+      AUTHENTICATION_EXPOSE_IN_FETCH_INSTANCES: 'true'
+      DEL_INSTANCE: 'false'
+      DATABASE_ENABLED: 'false'
+      REDIS_ENABLED: 'false'
+      LOG_LEVEL: ERROR
+      LOG_COLOR: 'false'
+    volumes:
+      - evolution_data:/evolution/instances
+    networks:
+      - tc_network
+
+  # ── Proxy reverso HTTP ─────────────────────────────────────
+  nginx:
+    image: nginx:alpine
+    container_name: tc_nginx
+    restart: unless-stopped
+    ports:
+      - '80:80'
+    volumes:
+      - ./nginx/nginx-vps.conf:/etc/nginx/nginx.conf:ro
+      - uploads_data:/var/www/uploads:ro
+    depends_on:
+      - backend
+    networks:
+      - tc_network
+
+volumes:
+  postgres_data:
+  redis_data:
+  uploads_data:
+  evolution_data:
+
+networks:
+  tc_network:
+    driver: bridge

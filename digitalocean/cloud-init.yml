@@ -1,0 +1,63 @@
+#cloud-config
+# ============================================================
+# DigitalOcean User Data — Toque de Cor Chatbot
+# Cole este conteúdo em: Advanced Options > User Data
+# ao criar o Droplet
+# ============================================================
+
+package_update: true
+package_upgrade: true
+
+packages:
+  - curl
+  - git
+  - ufw
+
+runcmd:
+  # ── Instalar Docker ──────────────────────────────────────
+  - curl -fsSL https://get.docker.com | sh
+  - systemctl enable docker
+  - systemctl start docker
+
+  # ── Firewall básico ──────────────────────────────────────
+  - ufw allow OpenSSH
+  - ufw allow 80/tcp
+  - ufw allow 443/tcp
+  - ufw --force enable
+
+  # ── Clonar repositório ───────────────────────────────────
+  - git clone https://github.com/rafaellmelzi-maker/chatbot-toque-de-cor.git /opt/toque-de-cor
+  - chmod +x /opt/toque-de-cor/scripts/vps-firstboot.sh
+
+  # ── Criar arquivo .env com valores iniciais ──────────────
+  - |
+    cat > /opt/toque-de-cor/.env << 'EOF'
+    NODE_ENV=production
+    PORT=3001
+
+    POSTGRES_USER=toque_user
+    POSTGRES_PASSWORD=TROQUE_ESTA_SENHA_AGORA
+    POSTGRES_DB=toque_de_cor_db
+
+    JWT_SECRET=GERE_UMA_STRING_ALEATORIA_COM_64_CHARS_AQUI
+    JWT_REFRESH_SECRET=GERE_OUTRA_STRING_ALEATORIA_COM_64_CHARS_AQUI
+
+    OPENAI_API_KEY=ADICIONAR_DEPOIS
+
+    EVOLUTION_API_KEY=TROQUE_ESTA_CHAVE_EVOLUTION
+    WEBHOOK_SECRET=TROQUE_ESTE_SEGREDO_WEBHOOK
+
+    FRONTEND_URL=https://SEU_PROJETO.vercel.app
+    EOF
+
+  # ── Subir serviços ───────────────────────────────────────
+  - cd /opt/toque-de-cor && docker compose -f docker-compose.vps.yml up -d --build
+
+  # ── Marcar como concluído ────────────────────────────────
+  - echo "TOQUE DE COR SETUP CONCLUIDO" > /root/setup-done.txt
+
+final_message: |
+  Toque de Cor instalado em /opt/toque-de-cor
+  IMPORTANTE: edite o .env antes de usar em producao:
+    nano /opt/toque-de-cor/.env
+    cd /opt/toque-de-cor && docker compose -f docker-compose.vps.yml up -d
