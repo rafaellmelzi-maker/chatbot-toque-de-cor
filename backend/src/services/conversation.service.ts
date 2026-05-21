@@ -11,7 +11,7 @@ export class ConversationService {
 
     const where = {
       tenantId,
-      ...(status && { status: status as Parameters<typeof prisma.conversation.findMany>[0]['where'] }),
+      ...(status && { status: status as any }),
       ...(storeId && { storeId }),
       ...(userId && { assignedUserId: userId }),
     };

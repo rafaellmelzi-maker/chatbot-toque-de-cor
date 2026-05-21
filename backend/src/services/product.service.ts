@@ -69,7 +69,7 @@ export class ProductService {
 
     const updated = await prisma.product.update({
       where: { id },
-      data: data as Parameters<typeof prisma.product.update>[0]['data'],
+      data: data as any,
       include: { category: true, brand: true },
     });
 
