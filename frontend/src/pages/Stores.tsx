@@ -11,7 +11,7 @@ export default function Stores() {
 
   const { data, isLoading } = useQuery({
     queryKey: ['stores'],
-    queryFn: () => api.get('/stores').then((r) => r.data.data),
+    queryFn: () => api.get('/stores').then((r: any) => r.data.data),
   });
 
   const handleQR = async (storeId: string) => {
