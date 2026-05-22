@@ -85,6 +85,7 @@ services:
       AUTHENTICATION_EXPOSE_IN_FETCH_INSTANCES: 'true'
       DEL_INSTANCE: 'false'
       DATABASE_ENABLED: 'false'
+      DATABASE_PROVIDER: 'postgresql'
       REDIS_ENABLED: 'false'
       LOG_LEVEL: ERROR
       LOG_COLOR: 'false'
