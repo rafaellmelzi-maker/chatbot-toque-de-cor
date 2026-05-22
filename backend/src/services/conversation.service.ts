@@ -88,8 +88,8 @@ export class ConversationService {
     });
 
     // Envia via WhatsApp se for canal WhatsApp
-    if (conv.channel === 'WHATSAPP' && conv.whatsappPhone && conv.storeId) {
-      await whatsappService.sendMessage(conv.storeId, conv.whatsappPhone, message).catch(() => {});
+    if (conv.channel === 'WHATSAPP' && conv.whatsappPhone) {
+      await whatsappService.sendMessage(conv.tenantId, conv.whatsappPhone, message).catch(() => {});
     }
 
     return msg;

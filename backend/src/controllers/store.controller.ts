@@ -45,14 +45,21 @@ export class StoreController {
 
   connectWhatsApp = async (req: Request, res: Response, next: NextFunction) => {
     try {
-      const result = await storeService.connectWhatsApp(req.params.id, req.user!.tenantId);
+      const result = await storeService.connectWhatsApp(req.user!.tenantId);
       res.json({ success: true, data: result });
     } catch (err) { next(err); }
   };
 
   getQRCode = async (req: Request, res: Response, next: NextFunction) => {
     try {
-      const result = await storeService.getQRCode(req.params.id, req.user!.tenantId);
+      const result = await storeService.getQRCode(req.user!.tenantId);
+      res.json({ success: true, data: result });
+    } catch (err) { next(err); }
+  };
+
+  getWhatsAppStatus = async (req: Request, res: Response, next: NextFunction) => {
+    try {
+      const result = await storeService.getWhatsAppStatus(req.user!.tenantId);
       res.json({ success: true, data: result });
     } catch (err) { next(err); }
   };

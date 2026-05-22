@@ -9,7 +9,10 @@ router.get('/', authenticate, ctrl.list);
 router.get('/:id', authenticate, ctrl.getById);
 router.post('/', authenticate, authorize('TENANT_ADMIN', 'SUPER_ADMIN'), ctrl.create);
 router.put('/:id', authenticate, authorize('TENANT_ADMIN', 'SUPER_ADMIN'), ctrl.update);
-router.post('/:id/whatsapp/connect', authenticate, authorize('TENANT_ADMIN', 'SUPER_ADMIN'), ctrl.connectWhatsApp);
-router.get('/:id/whatsapp/qr', authenticate, ctrl.getQRCode);
+
+// Rotas de WhatsApp global (número único para todas as lojas)
+router.post('/whatsapp/connect', authenticate, authorize('TENANT_ADMIN', 'SUPER_ADMIN'), ctrl.connectWhatsApp);
+router.get('/whatsapp/qr', authenticate, ctrl.getQRCode);
+router.get('/whatsapp/status', authenticate, ctrl.getWhatsAppStatus);
 
 export default router;

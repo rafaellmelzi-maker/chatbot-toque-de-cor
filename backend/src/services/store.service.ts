@@ -32,13 +32,15 @@ export class StoreService {
     return prisma.store.update({ where: { id }, data });
   }
 
-  async connectWhatsApp(id: string, tenantId: string) {
-    return whatsappService.createInstance(id, tenantId);
+  async connectWhatsApp(tenantId: string) {
+    return whatsappService.createInstance(tenantId);
   }
 
-  async getQRCode(id: string, tenantId: string) {
-    const store = await prisma.store.findFirst({ where: { id, tenantId } });
-    if (!store) throw new AppError('Loja não encontrada', 404);
-    return whatsappService.getQRCode(id);
+  async getQRCode(tenantId: string) {
+    return whatsappService.getQRCode(tenantId);
+  }
+
+  async getWhatsAppStatus(tenantId: string) {
+    return whatsappService.getStatus(tenantId);
   }
 }

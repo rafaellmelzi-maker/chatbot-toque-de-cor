@@ -39,6 +39,7 @@ model Tenant {
   conversations Conversation[]
   aiConfigs    AIConfig[]
   prompts      Prompt[]
+  whatsappInstances WhatsAppInstance[]
 
   @@map("tenants")
 }
@@ -395,18 +396,21 @@ model Prompt {
 }
 
 // ─── INSTÂNCIA WHATSAPP ──────────────────────────────────────────
+// Uma única instância por tenant (número único para todas as lojas)
 model WhatsAppInstance {
-  id           String              @id @default(uuid())
-  storeId      String
-  instanceName String              @unique
+  id           String         @id @default(uuid())
+  tenantId     String
+  storeId      String?        // não usado — mantido para compatibilidade
+  instanceName String         @unique
   phone        String?
-  status       WhatsAppStatus      @default(DISCONNECTED)
+  status       WhatsAppStatus @default(DISCONNECTED)
   qrCode       String?
   webhookUrl   String?
-  createdAt    DateTime            @default(now())
-  updatedAt    DateTime            @updatedAt
+  createdAt    DateTime       @default(now())
+  updatedAt    DateTime       @updatedAt
 
-  store Store @relation(fields: [storeId], references: [id], onDelete: Cascade)
+  tenant Tenant @relation(fields: [tenantId], references: [id], onDelete: Cascade)
+  store  Store?  @relation(fields: [storeId], references: [id])
 
   @@map("whatsapp_instances")
 }

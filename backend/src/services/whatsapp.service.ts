@@ -58,57 +58,116 @@ export class WhatsAppService {
 
     if (!text.trim()) return;
 
-    // Encontra a instância WhatsApp
-    const instance = await prisma.whatsAppInstance.findUnique({
-      where: { instanceName },
-      include: { store: true },
-    });
+    // Encontra a instância WhatsApp pelo instanceName → tenantId
+    const instance = await prisma.whatsAppInstance.findUnique({ where: { instanceName } });
 
     if (!instance) {
       logger.warn(`Instância WhatsApp não encontrada: ${instanceName}`);
       return;
     }
 
-    const tenantId = instance.store.tenantId;
+    const { tenantId } = instance;
 
-    // Encontra ou cria conversa ativa
+    // Encontra conversa ativa para este telefone
     let conversation = await prisma.conversation.findFirst({
-      where: {
-        tenantId,
-        whatsappPhone: phone,
-        status: { in: ['BOT', 'WAITING'] },
-      },
+      where: { tenantId, whatsappPhone: phone, status: { in: ['BOT', 'WAITING'] } },
       orderBy: { createdAt: 'desc' },
     });
 
     if (!conversation) {
-      // Nova conversa
-      const { ChatService } = await import('./chat.service');
-      const chatService = new ChatService();
-      const result = await chatService.startConversation({
-        tenantId,
-        channel: 'WHATSAPP',
-        customerPhone: phone,
-        storeId: instance.storeId,
+      // Novo contato → cria conversa aguardando seleção de loja
+      let customer = await prisma.customer.findUnique({
+        where: { tenantId_phone: { tenantId, phone } },
       });
-
-      // Envia boas-vindas
-      await this.sendMessage(instance.storeId, phone, result.welcomeMessage);
-
-      conversation = await prisma.conversation.findUnique({ where: { id: result.conversationId } });
+      if (!customer) {
+        customer = await prisma.customer.create({ data: { tenantId, phone } });
+      }
+      conversation = await prisma.conversation.create({
+        data: {
+          tenantId,
+          channel: 'WHATSAPP',
+          whatsappPhone: phone,
+          customerId: customer.id,
+          sessionData: { state: 'AWAITING_STORE' },
+        },
+      });
+      await this.sendStoreMenu(tenantId, phone, instanceName);
+      return;
     }
 
-    if (!conversation) return;
+    const sessionData = (conversation.sessionData as Record<string, unknown>) ?? {};
 
-    // Processa mensagem pelo bot (apenas se em modo BOT)
+    // Aguardando seleção de loja
+    if (!conversation.storeId || sessionData['state'] === 'AWAITING_STORE') {
+      await this.handleStoreSelection(conversation, text, tenantId, phone, instanceName);
+      return;
+    }
+
+    // Fluxo normal de chat com IA da loja selecionada
     if (conversation.status === 'BOT') {
       const { ChatService } = await import('./chat.service');
       const chatService = new ChatService();
       const result = await chatService.processMessage(conversation.id, text, tenantId);
-
-      // Envia resposta via WhatsApp
-      await this.sendMessage(instance.storeId, phone, result.response);
+      await this.sendRawMessage(instanceName, phone, result.response);
     }
+  }
+
+  /** Envia menu de seleção de loja */
+  private async sendStoreMenu(tenantId: string, phone: string, instanceName: string): Promise<void> {
+    const stores = await prisma.store.findMany({
+      where: { tenantId, isActive: true },
+      orderBy: { name: 'asc' },
+      select: { name: true, city: true, state: true },
+    });
+
+    const list = stores
+      .map((s, i) => `${i + 1}. ${s.name.replace('Toque de Cor – ', '')}${s.city ? ` – ${s.city}/${s.state}` : ''}`)
+      .join('\n');
+
+    const text = `Olá! Bem-vindo à *Toque de Cor*! 🎨\n\nEscolha a loja mais próxima:\n\n${list}\n\nDigite o *número* da loja:`;
+    await this.sendRawMessage(instanceName, phone, text);
+  }
+
+  /** Processa a resposta do cliente com o número da loja */
+  private async handleStoreSelection(
+    conversation: { id: string; tenantId: string },
+    text: string,
+    tenantId: string,
+    phone: string,
+    instanceName: string,
+  ): Promise<void> {
+    const stores = await prisma.store.findMany({
+      where: { tenantId, isActive: true },
+      orderBy: { name: 'asc' },
+    });
+
+    const idx = parseInt(text.trim(), 10) - 1;
+    if (isNaN(idx) || idx < 0 || idx >= stores.length) {
+      await this.sendRawMessage(instanceName, phone, `Por favor, digite apenas o *número* da loja desejada.`);
+      await this.sendStoreMenu(tenantId, phone, instanceName);
+      return;
+    }
+
+    const store = stores[idx];
+
+    // Atualiza conversa com a loja escolhida
+    await prisma.conversation.update({
+      where: { id: conversation.id },
+      data: {
+        storeId: store.id,
+        sessionData: { state: 'CHATTING', storeSelectedAt: new Date().toISOString() },
+      },
+    });
+
+    // Mensagem de boas-vindas da loja
+    const aiConfig = await prisma.aIConfig.findUnique({ where: { tenantId } });
+    const welcome = aiConfig?.welcomeMessage ?? 'Olá! 👋 Como posso te ajudar hoje?';
+    const greeting = `Ótimo! Você escolheu *${store.name.replace('Toque de Cor – ', '')}*.\n\n${welcome}`;
+
+    await this.sendRawMessage(instanceName, phone, greeting);
+    await prisma.message.create({
+      data: { conversationId: conversation.id, role: 'ASSISTANT', content: welcome, isFromBot: true },
+    });
   }
 
   private async handleConnectionUpdate(payload: Record<string, unknown>) {
@@ -134,83 +193,93 @@ export class WhatsAppService {
     logger.info(`WhatsApp ${instanceName}: ${newStatus}`);
   }
 
-  /**
-   * Envia mensagem de texto via WhatsApp
-   */
-  async sendMessage(storeId: string, phone: string, text: string): Promise<void> {
-    const instance = await prisma.whatsAppInstance.findFirst({ where: { storeId, status: 'CONNECTED' } });
-    if (!instance) {
-      logger.warn(`Sem instância WhatsApp ativa para loja ${storeId}`);
-      return;
-    }
-
-    await evolutionFetch(`/message/sendText/${instance.instanceName}`, {
+  /** Envia mensagem diretamente via Evolution API */
+  private async sendRawMessage(instanceName: string, phone: string, text: string): Promise<void> {
+    await evolutionFetch(`/message/sendText/${instanceName}`, {
       method: 'POST',
-      body: JSON.stringify({
-        number: phone,
-        text,
-        delay: 1200, // delay humanizado em ms
-      }),
+      body: JSON.stringify({ number: phone, text, delay: 1200 }),
     });
   }
 
   /**
-   * Cria instância WhatsApp e retorna QR code
+   * Envia mensagem de texto via WhatsApp (usado por vendedores humanos)
+   * @param tenantId - ID do tenant (número único por tenant)
    */
-  async createInstance(storeId: string, tenantId: string) {
-    const store = await prisma.store.findFirst({ where: { id: storeId, tenantId } });
-    if (!store) throw new AppError('Loja não encontrada', 404);
+  async sendMessage(tenantId: string, phone: string, text: string): Promise<void> {
+    const instance = await prisma.whatsAppInstance.findFirst({ where: { tenantId, status: 'CONNECTED' } });
+    if (!instance) {
+      logger.warn(`Sem instância WhatsApp ativa para tenant ${tenantId}`);
+      return;
+    }
+    await this.sendRawMessage(instance.instanceName, phone, text);
+  }
 
-    const instanceName = `toque-de-cor-${store.code.toLowerCase()}`;
+  /**
+   * Cria instância WhatsApp para o tenant (número único para todas as lojas)
+   */
+  async createInstance(tenantId: string) {
+    const tenant = await prisma.tenant.findUnique({ where: { id: tenantId } });
+    if (!tenant) throw new AppError('Tenant não encontrado', 404);
 
-    // Cria instância na Evolution API
-    await evolutionFetch('/instance/create', {
-      method: 'POST',
-      body: JSON.stringify({
-        instanceName,
-        qrcode: true,
-        integration: 'WHATSAPP-BAILEYS',
-        webhook: `${env.BACKEND_URL ?? 'http://backend:3001'}/api/webhooks/whatsapp`,
-        webhookByEvents: true,
-        events: ['MESSAGES_UPSERT', 'CONNECTION_UPDATE'],
-      }),
-    });
+    const instanceName = `toque-de-cor-${tenant.slug}`;
 
-    // Salva no banco
+    // Tenta criar na Evolution API (ignora erro se já existir)
+    try {
+      await evolutionFetch('/instance/create', {
+        method: 'POST',
+        body: JSON.stringify({
+          instanceName,
+          qrcode: true,
+          integration: 'WHATSAPP-BAILEYS',
+          webhook: `${env.BACKEND_URL ?? 'http://backend:3001'}/api/webhooks/whatsapp`,
+          webhookByEvents: true,
+          events: ['MESSAGES_UPSERT', 'CONNECTION_UPDATE'],
+        }),
+      });
+    } catch (err: any) {
+      // Instância já existe na Evolution API — continua
+      if (!err?.message?.includes('already')) throw err;
+    }
+
     const instance = await prisma.whatsAppInstance.upsert({
       where: { instanceName },
       update: { status: 'CONNECTING' },
-      create: {
-        storeId,
-        instanceName,
-        status: 'CONNECTING',
-      },
+      create: { tenantId, instanceName, status: 'CONNECTING' },
     });
 
     return instance;
   }
 
   /**
-   * Obtém QR code para conexão
+   * Obtém QR code para conexão do tenant
    */
-  async getQRCode(storeId: string) {
-    const instance = await prisma.whatsAppInstance.findFirst({ where: { storeId } });
-    if (!instance) throw new AppError('Instância não encontrada. Conecte primeiro.', 404);
+  async getQRCode(tenantId: string) {
+    const instance = await prisma.whatsAppInstance.findFirst({ where: { tenantId } });
+    if (!instance) throw new AppError('Instância não encontrada. Clique em "Conectar" primeiro.', 404);
 
     try {
       const data = await evolutionFetch(`/instance/connect/${instance.instanceName}`);
       const qrCode = data?.base64 ?? data?.qrcode?.base64;
 
       if (qrCode) {
-        await prisma.whatsAppInstance.update({
-          where: { id: instance.id },
-          data: { qrCode },
-        });
+        await prisma.whatsAppInstance.update({ where: { id: instance.id }, data: { qrCode } });
       }
 
       return { qrCode, status: instance.status };
-    } catch (err) {
+    } catch {
       return { qrCode: instance.qrCode, status: instance.status };
     }
+  }
+
+  /**
+   * Retorna status da instância WhatsApp do tenant
+   */
+  async getStatus(tenantId: string) {
+    const instance = await prisma.whatsAppInstance.findFirst({ where: { tenantId } });
+    return {
+      connected: instance?.status === 'CONNECTED',
+      status: instance?.status ?? 'DISCONNECTED',
+      phone: instance?.phone ?? null,
+    };
   }
 }
