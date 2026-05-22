@@ -11,13 +11,13 @@ export default function Stores() {
 
   const { data, isLoading } = useQuery({
     queryKey: ['stores'],
-    queryFn: () => api.get('/stores').then((r: any) => r.data.data),
+    queryFn: () => api.get('/api/stores').then((r: any) => r.data.data),
   });
 
   const handleQR = async (storeId: string) => {
     if (qrStoreId === storeId) { setQrStoreId(null); setQrData(null); return; }
     try {
-      const res = await api.get(`/stores/${storeId}/whatsapp/qrcode`);
+      const res = await api.get(`/api/stores/${storeId}/whatsapp/qrcode`);
       setQrStoreId(storeId);
       setQrData(res.data.data?.qrcode ?? null);
     } catch {

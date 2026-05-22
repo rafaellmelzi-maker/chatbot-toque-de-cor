@@ -7,7 +7,7 @@ import { toast } from 'react-toastify';
 export default function Settings() {
   const { data, isLoading } = useQuery({
     queryKey: ['ai-config'],
-    queryFn: () => api.get('/settings/ai-config').then((r: any) => r.data.data),
+    queryFn: () => api.get('/api/settings/ai-config').then((r: any) => r.data.data),
   });
 
   const [form, setForm] = useState({

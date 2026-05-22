@@ -45,13 +45,13 @@ export class DashboardService {
 
     const conversations = await prisma.$queryRaw<Array<{ date: string; count: bigint }>>`
       SELECT
-        DATE(created_at)::text AS date,
+        DATE("createdAt")::text AS date,
         COUNT(*)::bigint AS count
       FROM conversations
-      WHERE tenant_id = ${tenantId}
-        AND created_at >= ${since}
-      GROUP BY DATE(created_at)
-      ORDER BY DATE(created_at)
+      WHERE "tenantId" = ${tenantId}
+        AND "createdAt" >= ${since}
+      GROUP BY DATE("createdAt")
+      ORDER BY DATE("createdAt")
     `;
 
     return conversations.map((c) => ({ date: c.date, count: Number(c.count) }));
