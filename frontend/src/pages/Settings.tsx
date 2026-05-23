@@ -25,7 +25,7 @@ export default function Settings() {
   }, [data]);
 
   const saveMutation = useMutation({
-    mutationFn: () => api.put('/settings/ai-config', form),
+    mutationFn: () => api.put('/api/settings/ai-config', form),
     onSuccess: () => toast.success('Configurações salvas com sucesso!'),
     onError: () => toast.error('Erro ao salvar configurações.'),
   });
