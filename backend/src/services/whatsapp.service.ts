@@ -35,6 +35,8 @@ export class WhatsAppService {
       await this.handleIncomingMessage(payload);
     } else if (event === 'connection.update') {
       await this.handleConnectionUpdate(payload);
+    } else if (event === 'qrcode.updated') {
+      await this.handleQrCodeUpdate(payload);
     }
   }
 
@@ -172,7 +174,7 @@ export class WhatsAppService {
 
   private async handleConnectionUpdate(payload: Record<string, unknown>) {
     const instanceName = payload.instance as string;
-    const data = payload.data as Record<string, string>;
+    const data = payload.data as Record<string, unknown>;
 
     const statusMap: Record<string, string> = {
       open: 'CONNECTED',
@@ -180,17 +182,40 @@ export class WhatsAppService {
       connecting: 'CONNECTING',
     };
 
-    const newStatus = statusMap[data?.state ?? ''] ?? 'DISCONNECTED';
+    const state = data?.state as string;
+    const newStatus = statusMap[state ?? ''] ?? 'DISCONNECTED';
+
+    // QR code pode vir embutido no connection.update (algumas versões da Evolution API)
+    const embeddedQr =
+      (data?.qrcode as Record<string, string>)?.base64 ??
+      (data?.base64 as string);
 
     await prisma.whatsAppInstance.updateMany({
       where: { instanceName },
       data: {
         status: newStatus as 'CONNECTED' | 'DISCONNECTED' | 'CONNECTING' | 'BANNED',
-        ...(data?.state === 'open' && { qrCode: null }),
+        ...(state === 'open' && { qrCode: null }),
+        ...(embeddedQr && { qrCode: embeddedQr }),
       },
     });
 
     logger.info(`WhatsApp ${instanceName}: ${newStatus}`);
+  }
+
+  private async handleQrCodeUpdate(payload: Record<string, unknown>) {
+    const instanceName = payload.instance as string;
+    const data = payload.data as Record<string, unknown>;
+    const qrCode =
+      (data?.qrcode as Record<string, string>)?.base64 ??
+      (data?.base64 as string);
+
+    if (qrCode && instanceName) {
+      await prisma.whatsAppInstance.updateMany({
+        where: { instanceName },
+        data: { qrCode, status: 'CONNECTING' },
+      });
+      logger.info(`QR Code atualizado para instância ${instanceName}`);
+    }
   }
 
   /** Envia mensagem diretamente via Evolution API */
