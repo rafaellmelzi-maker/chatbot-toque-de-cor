@@ -247,8 +247,16 @@ export class WhatsAppService {
     if (!tenant) throw new AppError('Tenant não encontrado', 404);
 
     const instanceName = `toque-de-cor-${tenant.slug}`;
+    const webhookUrl = `${env.BACKEND_URL ?? 'http://backend:3001'}/api/webhooks/whatsapp`;
+    const webhookConfig = {
+      enabled: true,
+      url: webhookUrl,
+      webhookByEvents: false,
+      events: ['MESSAGES_UPSERT', 'QRCODE_UPDATED', 'CONNECTION_UPDATE', 'MESSAGES_UPDATE'],
+    };
 
-    // Tenta criar na Evolution API (ignora erro se já existir)
+    let alreadyExists = false;
+    // Tenta criar na Evolution API
     try {
       await evolutionFetch('/instance/create', {
         method: 'POST',
@@ -256,26 +264,41 @@ export class WhatsAppService {
           instanceName,
           qrcode: true,
           integration: 'WHATSAPP-BAILEYS',
-          webhook: {
-            enabled: true,
-            url: `${env.BACKEND_URL ?? 'http://backend:3001'}/api/webhooks/whatsapp`,
-            webhookByEvents: true,
-            events: ['MESSAGES_UPSERT', 'CONNECTION_UPDATE'],
-          },
+          webhook: webhookConfig,
         }),
       });
     } catch (err: any) {
-      // Instância já existe na Evolution API — continua
-      if (!err?.message?.includes('already')) throw err;
+      if (err?.message?.includes('already') || err?.message?.includes('exists')) {
+        alreadyExists = true;
+      } else {
+        throw err;
+      }
     }
 
-    const instance = await prisma.whatsAppInstance.upsert({
+    // Se a instância já existia, atualiza o webhook para garantir QRCODE_UPDATED
+    if (alreadyExists) {
+      try {
+        await evolutionFetch(`/webhook/set/${instanceName}`, {
+          method: 'POST',
+          body: JSON.stringify(webhookConfig),
+        });
+      } catch (_) { /* ignora falha ao atualizar webhook */ }
+    }
+
+    // Inicia conexão (gera QR code) — limpa QR antigo no BD
+    await prisma.whatsAppInstance.upsert({
       where: { instanceName },
-      update: { status: 'CONNECTING' },
+      update: { status: 'CONNECTING', qrCode: null },
       create: { tenantId, instanceName, status: 'CONNECTING' },
     });
 
-    return instance;
+    // Chama connect para disparar geração do QR na Evolution API
+    try {
+      await evolutionFetch(`/instance/connect/${instanceName}`);
+    } catch (_) { /* connect pode retornar count:0, que não é erro */ }
+
+    const instance = await prisma.whatsAppInstance.findUnique({ where: { instanceName } });
+    return instance!;
   }
 
   /**
@@ -285,15 +308,27 @@ export class WhatsAppService {
     const instance = await prisma.whatsAppInstance.findFirst({ where: { tenantId } });
     if (!instance) throw new AppError('Instância não encontrada. Clique em "Conectar" primeiro.', 404);
 
+    // Se já temos QR no banco, retorna direto
+    if (instance.qrCode && instance.status === 'CONNECTING') {
+      return { qrCode: instance.qrCode, status: instance.status };
+    }
+
     try {
+      // Chama /instance/connect para forçar geração do QR
       const data = await evolutionFetch(`/instance/connect/${instance.instanceName}`);
-      const qrCode = data?.base64 ?? data?.qrcode?.base64;
+      // Evolution API v2: QR pode vir em base64 direto ou aninhado
+      const qrCode = data?.base64 ?? data?.qrcode?.base64 ?? null;
 
       if (qrCode) {
-        await prisma.whatsAppInstance.update({ where: { id: instance.id }, data: { qrCode } });
+        await prisma.whatsAppInstance.update({
+          where: { id: instance.id },
+          data: { qrCode, status: 'CONNECTING' },
+        });
+        return { qrCode, status: 'CONNECTING' };
       }
 
-      return { qrCode, status: instance.status };
+      // QR ainda não disponível (webhook ainda não chegou)
+      return { qrCode: instance.qrCode, status: instance.status };
     } catch {
       return { qrCode: instance.qrCode, status: instance.status };
     }
