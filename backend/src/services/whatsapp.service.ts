@@ -231,9 +231,12 @@ export class WhatsAppService {
           instanceName,
           qrcode: true,
           integration: 'WHATSAPP-BAILEYS',
-          webhook: `${env.BACKEND_URL ?? 'http://backend:3001'}/api/webhooks/whatsapp`,
-          webhookByEvents: true,
-          events: ['MESSAGES_UPSERT', 'CONNECTION_UPDATE'],
+          webhook: {
+            enabled: true,
+            url: `${env.BACKEND_URL ?? 'http://backend:3001'}/api/webhooks/whatsapp`,
+            webhookByEvents: true,
+            events: ['MESSAGES_UPSERT', 'CONNECTION_UPDATE'],
+          },
         }),
       });
     } catch (err: any) {
