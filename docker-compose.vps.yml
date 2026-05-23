@@ -76,7 +76,7 @@ services:
 
   # ── WhatsApp (Evolution API) ───────────────────────────────
   evolution:
-    image: atendai/evolution-api:latest
+    image: evoapicloud/evolution-api:latest
     container_name: tc_evolution
     restart: unless-stopped
     depends_on:

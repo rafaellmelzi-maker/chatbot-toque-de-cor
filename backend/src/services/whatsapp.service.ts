@@ -189,7 +189,8 @@ export class WhatsAppService {
     const newStatus = statusMap[state ?? ''] ?? 'DISCONNECTED';
 
     // Log completo para diagnóstico
-    logger.info(`connection.update state="${state}" dataKeys="${Object.keys(data || {}).join(',')}"`);
+    const statusReason = data?.statusReason as unknown;
+    logger.info(`connection.update state="${state}" statusReason=${JSON.stringify(statusReason)} dataKeys="${Object.keys(data || {}).join(',')}"`);
 
     // QR code pode vir embutido no connection.update (algumas versões da Evolution API)
     const embeddedQr =
