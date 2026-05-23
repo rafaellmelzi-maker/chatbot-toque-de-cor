@@ -100,9 +100,11 @@ services:
       DATABASE_SAVE_DATA_CHATS: 'true'
       DATABASE_SAVE_DATA_LABELS: 'true'
       DATABASE_SAVE_DATA_HISTORIC: 'true'
-      REDIS_ENABLED: 'true'
-      REDIS_URI: 'redis://redis:6379'
-      REDIS_PREFIX_KEY: 'evolution'
+      CACHE_REDIS_ENABLED: 'true'
+      CACHE_REDIS_URI: 'redis://redis:6379'
+      CACHE_REDIS_PREFIX_KEY: 'evolution'
+      CACHE_REDIS_SAVE_INSTANCES: 'false'
+      CACHE_LOCAL_ENABLED: 'false'
       LOG_LEVEL: ERROR
       LOG_COLOR: 'false'
     volumes:
