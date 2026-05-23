@@ -30,6 +30,7 @@ export class WhatsAppService {
    */
   async processWebhook(payload: Record<string, unknown>) {
     const event = payload.event as string;
+    logger.info(`Webhook recebido: event="${event}" instance="${payload.instance}"`);
 
     if (event === 'messages.upsert') {
       await this.handleIncomingMessage(payload);
@@ -37,6 +38,8 @@ export class WhatsAppService {
       await this.handleConnectionUpdate(payload);
     } else if (event === 'qrcode.updated') {
       await this.handleQrCodeUpdate(payload);
+    } else {
+      logger.info(`Webhook ignorado: ${event} - payload keys: ${Object.keys(payload.data as object || {}).join(',')}`);
     }
   }
 
@@ -184,6 +187,9 @@ export class WhatsAppService {
 
     const state = data?.state as string;
     const newStatus = statusMap[state ?? ''] ?? 'DISCONNECTED';
+
+    // Log completo para diagnóstico
+    logger.info(`connection.update state="${state}" dataKeys="${Object.keys(data || {}).join(',')}"`);
 
     // QR code pode vir embutido no connection.update (algumas versões da Evolution API)
     const embeddedQr =
