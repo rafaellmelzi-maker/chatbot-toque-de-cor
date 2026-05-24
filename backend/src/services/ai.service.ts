@@ -21,11 +21,14 @@ export interface SessionData {
   projectType?: string;
   surfaceState?: string;
   customerName?: string;
+  hasRecommendation?: boolean;
+  budgetPresented?: boolean;
   [key: string]: unknown;
 }
 
 interface IntentAnalysis {
-  intent: 'COMPRA' | 'DÚVIDA_TÉCNICA' | 'ORÇAMENTO' | 'TRANSFERIR_HUMANO' | 'RECLAMAÇÃO' | 'OUTRO';
+  intent: 'COMPRA' | 'DUVIDA_TECNICA' | 'ORCAMENTO' | 'TRANSFERIR_HUMANO' | 'RECLAMACAO' | 'OUTRO'
+        | 'DÚVIDA_TÉCNICA' | 'ORÇAMENTO' | 'RECLAMAÇÃO'; // aliases com acentos para compatibilidade
   collectedData: Partial<SessionData>;
   purchaseScore: number;
   shouldTransfer: boolean;
@@ -135,11 +138,26 @@ export class AIService {
       finalResponse = `⚠️ Atenção: aplicar ${demaoCheck.count} demãos pode causar empolamento, descascamento e acabamento irregular. O recomendado é 2 a 3 demãos com uma tinta de qualidade — garante resultado perfeito com economia!\n\n` + finalResponse;
     }
 
+    // 9.7. Detecta se a resposta contém recomendação técnica completa com as duas marcas
+    if (this.responseContainsRecommendation(finalResponse)) {
+      updatedSessionData.hasRecommendation = true;
+      updatedSessionData.budgetPresented = true;
+    }
+
+    // 10. Transferência é permitida SOMENTE após recomendação apresentada, exceto emergências
+    const isEmergencyTransfer =
+      intent.intent === 'TRANSFERIR_HUMANO' ||
+      intent.intent === 'RECLAMACAO' ||
+      intent.intent === 'RECLAMAÇÃO';
+    const hasRec = updatedSessionData.hasRecommendation === true;
+    const rawShouldTransfer = intent.shouldTransfer || intent.purchaseScore >= 80;
+    const finalShouldTransfer = rawShouldTransfer && (hasRec || isEmergencyTransfer);
+
     return {
       response: finalResponse,
       intent,
       updatedSessionData,
-      shouldTransfer: intent.shouldTransfer || intent.purchaseScore >= 80,
+      shouldTransfer: finalShouldTransfer,
       tokensUsed,
     };
   }
@@ -212,7 +230,9 @@ export class AIService {
         },
       });
       const intentResult = await intentModel.generateContent(prompt);
-      return JSON.parse(intentResult.response.text()) as IntentAnalysis;
+      let rawIntent = intentResult.response.text().trim();
+      rawIntent = rawIntent.replace(/^```(?:json)?\s*/i, '').replace(/\s*```\s*$/, '');
+      return JSON.parse(rawIntent) as IntentAnalysis;
     } catch {
       return {
         intent: 'OUTRO',
@@ -287,16 +307,28 @@ export class AIService {
       return { transfer: true, reason: 'Projeto corporativo / grande obra' };
     }
 
-    // D) Pedido de preço ou orçamento — proibido responder, redirecionar para vendedor
+    // D) Pedido de preço ou orçamento — só transfere APÓS recomendação técnica ter sido apresentada
     if (
+      sessionData.hasRecommendation === true &&
       /\b(pre[cç]o|valor(es)?|quanto\s+(custa|fica|vale|cobram?|sai)|or[cç]amento|desconto|promo[cç][aã]o|tabela\s+de\s+pre[cç]|mais\s+barato|custo|investimento|cobram)\b/i.test(
         message,
       )
     ) {
-      return { transfer: true, reason: 'Solicitação de preço ou orçamento' };
+      return { transfer: true, reason: 'Orçamento técnico já apresentado — encaminhando para vendedor' };
     }
 
     return { transfer: false, reason: null };
+  }
+
+  /**
+   * Detecta se a resposta do bot contém uma recomendação técnica completa (orçamento pronto)
+   */
+  private responseContainsRecommendation(response: string): boolean {
+    const suvinilMention = /SUVINIL\s*:|OPÇÃO\s+SUVINIL|🎨\s*OPÇÃO\s+SUVINIL/i.test(response);
+    const swMention = /SHERWIN[- ]WILLIAMS\s*:|OPÇÃO\s+SHERWIN|🎨\s*OPÇÃO\s+SHERWIN/i.test(response);
+    const budgetMention = /📋\s*RESUMO\s+DO\s+PROJETO|RESUMO\s+DO\s+PROJETO|orçamento\s+técnico|recomendação\s+técnica\s+completa|Já\s+organizei\s+toda/i.test(response);
+    // Transfere quando apresentou ambas as marcas OU quando há um orçamento técnico estruturado
+    return (suvinilMention && swMention) || budgetMention;
   }
 
   private buildCustomerContext(sessionData: SessionData): string {
