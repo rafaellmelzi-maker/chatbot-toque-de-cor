@@ -224,36 +224,47 @@ export class DistributionService {
     const environment = sessionData.environment as string | undefined;
     const priority = area && area >= 500 ? 'ALTA ⚡' : 'NORMAL';
 
-    // Produtos recomendados (do resumo da IA)
-    const products = (summary.products || summary.recommendedProducts) as
-      | Array<{ name: string; quantity: number; unit?: string }>
+    // Campos do resumo gerado pela IA (generateConversationSummary)
+    const project = (summary.project as string) || '';
+    const observations = (summary.observations as string) || '';
+    const nextStep = (summary.nextStep as string) || '';
+    const estimatedTotal = summary.estimatedTotal as number | undefined;
+    const qualificationScore = summary.qualificationScore as number | undefined;
+
+    const products = (summary.recommendedProducts || summary.products) as
+      | Array<{ name: string; quantity: string | number; unit?: string; estimatedPrice?: number }>
       | undefined;
+
     let productLines = '';
     if (products?.length) {
       productLines =
-        '\n🎨 *PRODUTOS RECOMENDADOS:*\n' +
-        products.map(p => `• ${p.name} × ${p.quantity}${p.unit || ''}`).join('\n');
+        '🎨 *PRODUTOS RECOMENDADOS:*\n' +
+        products
+          .map(p => {
+            const price = p.estimatedPrice ? ` — R$ ${Number(p.estimatedPrice).toFixed(2)}` : '';
+            return `• ${p.name} × ${p.quantity}${p.unit || ''}${price}`;
+          })
+          .join('\n');
     }
-
-    const summaryText =
-      (summary.summary as string) ||
-      (summary.briefDescription as string) ||
-      (typeof summary === 'string' ? summary : 'Ver histórico da conversa');
 
     const lines = [
       `🔔 *NOVO LEAD — Toque de Cor ${storeName}*`,
-      `────────────────────`,
-      `👤 Cliente: ${customerName}`,
-      `📱 Telefone: ${customerPhone}`,
-      `⭐ Prioridade: ${priority}`,
+      `────────────────────────────`,
+      `👤 *Cliente:* ${customerName}`,
+      `📱 *Telefone:* ${customerPhone}`,
+      `⭐ *Prioridade:* ${priority}`,
+      qualificationScore !== undefined ? `🏆 *Score:* ${qualificationScore}/100` : '',
       ``,
       `📋 *PROJETO:*`,
+      project ? project : '',
       environment ? `• Ambiente: ${environment}` : '',
       surface ? `• Superfície: ${surface}` : '',
       area ? `• Metragem: ${area} m²` : '',
-      productLines,
+      estimatedTotal ? `💰 *Total estimado:* R$ ${Number(estimatedTotal).toFixed(2)}` : '',
       ``,
-      `💬 *RESUMO:* ${summaryText}`,
+      productLines,
+      observations ? `📝 *Observações:* ${observations}` : '',
+      nextStep ? `➡️ *Próximo passo:* ${nextStep}` : '',
       ``,
       `⏰ Responda em até *5 minutos* para garantir este lead.`,
     ]
