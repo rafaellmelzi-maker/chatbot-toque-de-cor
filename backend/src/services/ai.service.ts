@@ -178,9 +178,12 @@ export class AIService {
     const summaryResult = await jsonModel.generateContent(prompt);
 
     try {
-      return JSON.parse(summaryResult.response.text());
-    } catch {
-      logger.error('Falha ao parsear resumo da IA');
+      let raw = summaryResult.response.text().trim();
+      // Remove markdown code fences if present (```json ... ``` or ``` ... ```)
+      raw = raw.replace(/^```(?:json)?\s*/i, '').replace(/\s*```\s*$/, '');
+      return JSON.parse(raw);
+    } catch (parseErr) {
+      logger.error('Falha ao parsear resumo da IA:', summaryResult.response.text().substring(0, 200));
       return {
         customerName: sessionData.customerName ?? 'Cliente',
         project: sessionData.surface ? `Pintura de ${sessionData.surface}` : 'Projeto de pintura',
