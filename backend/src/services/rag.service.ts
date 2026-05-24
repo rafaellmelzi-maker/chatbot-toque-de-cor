@@ -72,6 +72,11 @@ export class RAGService {
     query: string,
     limit = 5,
   ): Promise<EmbeddingResult[]> {
+    // Embeddings requerem OpenAI — retorna lista vazia graciosamente se indisponível
+    const { env } = await import('../config/env');
+    if (!env.OPENAI_API_KEY) {
+      return [];
+    }
     try {
       // Gera embedding da query do usuário
       const queryEmbedding = await openai.embeddings.create({

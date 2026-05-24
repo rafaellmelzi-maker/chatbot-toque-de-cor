@@ -1,4 +1,5 @@
-import { openai, OPENAI_CONFIG } from '../config/openai';
+import { OPENAI_CONFIG } from '../config/openai';
+import { anthropic, ANTHROPIC_CONFIG } from '../config/anthropic';
 import { prisma } from '../config/database';
 import { redis } from '../config/redis';
 import { RAGService } from './rag.service';
@@ -74,25 +75,25 @@ export class AIService {
       .replace('{productContext}', productContext)
       .replace('{conversationSummary}', '');
 
-    // 7. Gera resposta com GPT
-    const openaiMessages: { role: 'system' | 'user' | 'assistant'; content: string }[] = [
-      { role: 'system', content: systemPrompt },
+    // 7. Gera resposta com Claude
+    const claudeMessages: { role: 'user' | 'assistant'; content: string }[] = [
       ...messages.map((m) => ({
-        role: m.role === 'USER' ? 'user' : 'assistant' as 'user' | 'assistant',
+        role: m.role === 'USER' ? 'user' as const : 'assistant' as const,
         content: m.content,
       })),
-      { role: 'user', content: userMessage },
+      { role: 'user' as const, content: userMessage },
     ];
 
-    const completion = await openai.chat.completions.create({
-      model: aiConfig?.model ?? OPENAI_CONFIG.model,
-      messages: openaiMessages,
-      temperature: aiConfig?.temperature ?? OPENAI_CONFIG.temperature,
-      max_tokens: aiConfig?.maxTokens ?? OPENAI_CONFIG.maxTokens,
+    const completion = await anthropic.messages.create({
+      model: ANTHROPIC_CONFIG.model,
+      system: systemPrompt,
+      messages: claudeMessages,
+      temperature: aiConfig?.temperature ?? ANTHROPIC_CONFIG.temperature,
+      max_tokens: aiConfig?.maxTokens ?? ANTHROPIC_CONFIG.maxTokens,
     });
 
-    const response = completion.choices[0]?.message?.content ?? 'Desculpe, não consegui processar sua mensagem.';
-    const tokensUsed = completion.usage?.total_tokens ?? 0;
+    const response = (completion.content[0] as { type: string; text: string })?.text ?? 'Desculpe, não consegui processar sua mensagem.';
+    const tokensUsed = (completion.usage?.input_tokens ?? 0) + (completion.usage?.output_tokens ?? 0);
 
     // 8. Adiciona cálculo de tinta se metragem foi mencionada
     let finalResponse = response;
@@ -143,16 +144,17 @@ export class AIService {
       .replace('{sessionData}', JSON.stringify(sessionData, null, 2))
       .replace('{products}', JSON.stringify(recommendedProducts, null, 2));
 
-    const completion = await openai.chat.completions.create({
-      model: OPENAI_CONFIG.model,
-      messages: [{ role: 'user', content: prompt }],
+    const completion = await anthropic.messages.create({
+      model: ANTHROPIC_CONFIG.model,
+      messages: [{ role: 'user', content: prompt + '\n\nResponda APENAS com JSON válido, sem markdown.' }],
       temperature: 0.3,
       max_tokens: 800,
-      response_format: { type: 'json_object' },
     });
 
     try {
-      return JSON.parse(completion.choices[0]?.message?.content ?? '{}');
+      const raw = (completion.content[0] as { type: string; text: string })?.text ?? '{}';
+      const jsonMatch = raw.match(/\{[\s\S]*\}/);
+      return JSON.parse(jsonMatch ? jsonMatch[0] : '{}');
     } catch {
       logger.error('Falha ao parsear resumo da IA');
       return {
@@ -174,15 +176,16 @@ export class AIService {
       .replace('{history}', historyText);
 
     try {
-      const completion = await openai.chat.completions.create({
-        model: 'gpt-4o-mini', // Modelo mais rápido/barato para classificação
-        messages: [{ role: 'user', content: prompt }],
+      const completion = await anthropic.messages.create({
+        model: ANTHROPIC_CONFIG.intentModel,
+        messages: [{ role: 'user', content: prompt + '\n\nResponda APENAS com JSON válido, sem markdown.' }],
         temperature: 0.1,
         max_tokens: 300,
-        response_format: { type: 'json_object' },
       });
 
-      return JSON.parse(completion.choices[0]?.message?.content ?? '{}') as IntentAnalysis;
+      const raw = (completion.content[0] as { type: string; text: string })?.text ?? '{}';
+      const jsonMatch = raw.match(/\{[\s\S]*\}/);
+      return JSON.parse(jsonMatch ? jsonMatch[0] : '{}') as IntentAnalysis;
     } catch {
       return {
         intent: 'OUTRO',
