@@ -82,7 +82,107 @@ async function main() {
       role: UserRole.SELLER,
     },
   });
-  console.log('✅ Usuários criados');
+
+  // ── Vendedores com configuração de distribuição automática ────
+  const sellerProfiles = [
+    {
+      storeCode: 'SP01',
+      name: 'Ana Paula',
+      email: 'ana.paula@toquedeor.com.br',
+      phone: '5511911110001',
+      sellerWeight: 3,
+      sellerSpecialties: ['residencial', 'premium', 'condomínio'],
+      maxConcurrent: 6,
+      performanceScore: 8.5,
+      workingHours: { start: '08:00', end: '18:00', days: [1, 2, 3, 4, 5] },
+    },
+    {
+      storeCode: 'SP01',
+      name: 'Roberto Silva',
+      email: 'roberto.silva@toquedeor.com.br',
+      phone: '5511911110002',
+      sellerWeight: 2,
+      sellerSpecialties: ['industrial', 'metal', 'piso'],
+      maxConcurrent: 5,
+      performanceScore: 7.2,
+      workingHours: { start: '08:00', end: '18:00', days: [1, 2, 3, 4, 5] },
+    },
+    {
+      storeCode: 'SP01',
+      name: 'Fernanda Costa',
+      email: 'fernanda.costa@toquedeor.com.br',
+      phone: '5511911110003',
+      sellerWeight: 2,
+      sellerSpecialties: ['residencial', 'fachada', 'obra grande'],
+      maxConcurrent: 5,
+      performanceScore: 6.8,
+      workingHours: { start: '10:00', end: '20:00', days: [1, 2, 3, 4, 5, 6] },
+    },
+    {
+      storeCode: 'SP02',
+      name: 'Marcelo Pinto',
+      email: 'marcelo.pinto@toquedeor.com.br',
+      phone: '5511911110004',
+      sellerWeight: 4,
+      sellerSpecialties: ['premium', 'corporativo', 'condomínio'],
+      maxConcurrent: 8,
+      performanceScore: 9.1,
+      workingHours: { start: '09:00', end: '18:00', days: [1, 2, 3, 4, 5] },
+    },
+    {
+      storeCode: 'SP02',
+      name: 'Juliana Mendes',
+      email: 'juliana.mendes@toquedeor.com.br',
+      phone: '5511911110005',
+      sellerWeight: 1,
+      sellerSpecialties: ['residencial'],
+      maxConcurrent: 4,
+      performanceScore: 5.5,
+      workingHours: { start: '13:00', end: '20:00', days: [2, 3, 4, 5, 6] },
+    },
+    {
+      storeCode: 'RJ01',
+      name: 'Diego Alves',
+      email: 'diego.alves@toquedeor.com.br',
+      phone: '5521911110006',
+      sellerWeight: 3,
+      sellerSpecialties: ['residencial', 'fachada', 'obra grande'],
+      maxConcurrent: 6,
+      performanceScore: 7.8,
+      workingHours: { start: '08:00', end: '17:00', days: [1, 2, 3, 4, 5] },
+    },
+  ];
+
+  for (const sp of sellerProfiles) {
+    await prisma.user.upsert({
+      where: { tenantId_email: { tenantId: tenant.id, email: sp.email } },
+      update: {
+        phone: sp.phone,
+        sellerWeight: sp.sellerWeight,
+        sellerSpecialties: sp.sellerSpecialties,
+        maxConcurrent: sp.maxConcurrent,
+        performanceScore: sp.performanceScore,
+        workingHours: sp.workingHours,
+        isOnline: false,
+      },
+      create: {
+        tenantId: tenant.id,
+        storeId: stores[sp.storeCode],
+        name: sp.name,
+        email: sp.email,
+        phone: sp.phone,
+        passwordHash: sellerHash,
+        role: UserRole.SELLER,
+        sellerWeight: sp.sellerWeight,
+        sellerSpecialties: sp.sellerSpecialties,
+        maxConcurrent: sp.maxConcurrent,
+        performanceScore: sp.performanceScore,
+        workingHours: sp.workingHours,
+        isOnline: false,
+      },
+    });
+  }
+  console.log(`✅ ${sellerProfiles.length + 1} vendedores criados/atualizados com perfis de distribuição`);
 
   // ── Categorias de produtos ────────────────────────────────────
   const categoryData = [
