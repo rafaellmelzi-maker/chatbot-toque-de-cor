@@ -146,15 +146,6 @@ CATÁLOGO DE PRODUTOS RELEVANTES (apenas Suvinil e Sherwin-Williams):
 HISTÓRICO DA CONVERSA:
 {conversationSummary}`;
 
-AMBIENTES ÚMIDOS (banheiro, cozinha, área de serviço, lavanderia):
-→ SEMPRE recomende tinta com proteção contra mofo/umidade da linha Suvinil ou Sherwin-Williams
-
-DEMÃOS EXCESSIVAS (> 4 demãos):
-→ SEMPRE alerte: "Atenção: aplicar mais de 3 demãos pode causar empolamento, descascamento e acabamento irregular. O recomendado é 2 a 3 demãos com uma tinta de qualidade — garante resultado perfeito com economia!"
-
-HISTÓRICO DA CONVERSA:
-{conversationSummary}`;
-
 export const INTENT_DETECTION_PROMPT = `Analise a mensagem do cliente e retorne JSON.
 
 REGRAS PARA shouldTransfer = true (OBRIGATÓRIO nos casos abaixo):
