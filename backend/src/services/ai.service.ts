@@ -85,10 +85,14 @@ export class AIService {
       },
     });
 
-    const geminiHistory = messages.map((m) => ({
+    const rawHistory = messages.map((m) => ({
       role: m.role === 'USER' ? 'user' as const : 'model' as const,
       parts: [{ text: m.content }],
     }));
+
+    // Gemini exige que o histórico comece com 'user'
+    const firstUserIdx = rawHistory.findIndex((m) => m.role === 'user');
+    const geminiHistory = firstUserIdx > 0 ? rawHistory.slice(firstUserIdx) : rawHistory;
 
     const chat = geminiModel.startChat({ history: geminiHistory });
     const result = await chat.sendMessage(userMessage);
