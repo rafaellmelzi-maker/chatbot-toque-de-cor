@@ -154,9 +154,16 @@ export class AIService {
     if (this.responseHasSherwin(finalResponse)) {
       updatedSessionData.hasSherwinRecommendation = true;
     }
-    // Orçamento técnico apresentado = AMBAS as marcas presentes
+    // Orçamento técnico apresentado = AMBAS as marcas presentes E bloco estruturado detectado
+    // ETAPA 3 do prompt sempre inclui "📋 RESUMO DO PROJETO" ou "RECOMENDAÇÃO TÉCNICA"
+    // Isso previne que a transferência dispare cedo demais (ex: MSG 8 "custo-benefício")
     if (updatedSessionData.hasSuvinilRecommendation && updatedSessionData.hasSherwinRecommendation) {
-      updatedSessionData.budgetPresented = true;
+      if (!updatedSessionData.budgetPresented) {
+        const hasBudgetBlock = /📋|RESUMO\s+DO\s+PROJETO|RECOMENDAÇÃO\s+TÉCNICA\s+SUVINIL|RECOMENDAÇÃO\s+TÉCNICA\s+SHERWIN/i.test(finalResponse);
+        if (hasBudgetBlock) {
+          updatedSessionData.budgetPresented = true;
+        }
+      }
     }
 
     // 10. Transferência é permitida SOMENTE após apresentar AMBAS as marcas, exceto emergências
