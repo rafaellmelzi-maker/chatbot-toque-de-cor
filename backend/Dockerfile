@@ -30,6 +30,7 @@ CMD ["sh", "entrypoint.sh"]
 FROM node:20-alpine AS development
 WORKDIR /app
 ENV NODE_ENV=development
+RUN apk add --no-cache openssl
 
 COPY package*.json ./
 RUN npm install
