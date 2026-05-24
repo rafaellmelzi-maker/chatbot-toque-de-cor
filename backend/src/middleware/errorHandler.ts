@@ -61,6 +61,16 @@ export function errorHandler(err: Error, req: Request, res: Response, _next: Nex
 
   // Erros genéricos (não expõe detalhes em produção)
   logger.error(`[${requestId}] Unhandled error:`, { message: err.message, stack: err.stack });
+
+  // Quota/rate limit da API de IA
+  if (err.message?.includes('429') || err.message?.includes('quota') || err.message?.includes('Too Many Requests')) {
+    return res.status(503).json({
+      success: false,
+      error: 'Serviço temporariamente indisponível. Tente novamente em alguns instantes.',
+      requestId,
+    });
+  }
+
   return res.status(500).json({
     success: false,
     error: process.env.NODE_ENV === 'production' ? 'Erro interno do servidor' : err.message,

@@ -72,6 +72,10 @@ export class ChatService {
   }
 
   async processMessage(conversationId: string, userMessage: string, tenantId: string) {
+    // Sanitizar input: remover null bytes que quebram PostgreSQL UTF-8
+    const sanitizedMessage = userMessage.replace(/\x00/g, '').trim();
+    if (!sanitizedMessage) throw new AppError('Mensagem não pode ser vazia', 400);
+
     // Busca conversa
     const conversation = await prisma.conversation.findFirst({
       where: { id: conversationId, tenantId },
@@ -89,7 +93,7 @@ export class ChatService {
       data: {
         conversationId,
         role: 'USER',
-        content: userMessage,
+        content: sanitizedMessage,
         isFromBot: false,
       },
     });
@@ -98,7 +102,7 @@ export class ChatService {
     const sessionData = (conversation.sessionData as Record<string, unknown>) ?? {};
     const aiResult = await aiService.processMessage(
       conversationId,
-      userMessage,
+      sanitizedMessage,
       tenantId,
       sessionData as Parameters<typeof aiService.processMessage>[3],
     );
