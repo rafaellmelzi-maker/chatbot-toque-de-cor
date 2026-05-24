@@ -1,6 +1,5 @@
 import { prisma } from '../config/database';
 import { logger } from '../utils/logger';
-import { AppError } from '../middleware/errorHandler';
 
 export interface EmbeddingResult {
   productId: string;
@@ -21,46 +20,11 @@ export interface EmbeddingResult {
 
 export class RAGService {
   /**
-   * Gera embedding para um produto e salva no banco
+   * Geração de embedding desabilitada (sem chave OpenAI válida).
+   * Busca textual é usada em searchSimilarProducts.
    */
-  async generateProductEmbedding(productId: string, tenantId: string): Promise<void> {
-    const product = await prisma.product.findFirst({
-      where: { id: productId, tenantId },
-      include: { category: true, brand: true },
-    });
-
-    if (!product) throw new AppError('Produto não encontrado', 404);
-
-    // Texto rico para gerar embedding semanticamente relevante
-    const text = [
-      `Nome: ${product.name}`,
-      `Marca: ${product.brand.name}`,
-      `Categoria: ${product.category.name}`,
-      `Descrição: ${product.description ?? ''}`,
-      `Superfícies: ${product.surfaces.join(', ')}`,
-      `Ambientes: ${product.environments.join(', ')}`,
-      `Acabamentos: ${product.finishes.join(', ')}`,
-      `Rendimento: ${product.coverage ?? 'N/A'} m²/L`,
-      `Tags: ${product.tags.join(', ')}`,
-      `Dados técnicos: ${product.technicalData ?? ''}`,
-      `Aplicação: ${product.application ?? ''}`,
-    ].join('. ');
-
-    const response = await openai.embeddings.create({
-      model: OPENAI_CONFIG.embeddingModel,
-      input: text,
-    });
-
-    const embedding = response.data[0].embedding;
-
-    // Salva o embedding como vetor no PostgreSQL (pgvector)
-    await prisma.$executeRaw`
-      UPDATE products
-      SET embedding = ${JSON.stringify(embedding)}::vector
-      WHERE id = ${productId}
-    `;
-
-    logger.info(`Embedding gerado para produto ${product.name}`);
+  async generateProductEmbedding(_productId: string, _tenantId: string): Promise<void> {
+    logger.info('generateProductEmbedding: embeddings vetoriais desabilitados, usando busca textual');
   }
 
   /**
