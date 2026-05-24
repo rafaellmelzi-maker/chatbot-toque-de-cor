@@ -10,6 +10,7 @@ import dashboardRouter from './dashboard.routes';
 import whatsappRouter from './whatsapp.routes';
 import conversationRouter from './conversation.routes';
 import settingsRouter from './settings.routes';
+import distributionRouter from './distribution.routes';
 
 export const apiRouter = Router();
 
@@ -25,3 +26,4 @@ apiRouter.use('/dashboard', dashboardRouter);
 apiRouter.use('/webhooks', whatsappRouter);
 apiRouter.use('/conversations', conversationRouter);
 apiRouter.use('/settings', settingsRouter);
+apiRouter.use('/distribution', distributionRouter);

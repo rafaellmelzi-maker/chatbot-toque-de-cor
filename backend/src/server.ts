@@ -3,6 +3,7 @@ import { env } from './config/env';
 import { prisma } from './config/database';
 import { redis } from './config/redis';
 import { logger } from './utils/logger';
+import { DistributionService } from './services/distribution.service';
 
 async function bootstrap() {
   // ── Conexões ──────────────────────────────────────────────
@@ -18,9 +19,19 @@ async function bootstrap() {
     logger.info(`❤️  Health: http://localhost:${env.PORT}/api/health`);
   });
 
+  // ── Redistribuição automática por timeout (a cada 30s) ───
+  const distributionService = new DistributionService();
+  const redistributionInterval = setInterval(() => {
+    distributionService.redistributeTimedOut().catch(err =>
+      logger.error('[Distribution] Erro no ciclo de redistribuição:', err),
+    );
+  }, 30_000);
+  logger.info('⏱️  Redistribuição automática de leads ativada (30s)');
+
   // ── Graceful shutdown ─────────────────────────────────────
   const shutdown = async (signal: string) => {
     logger.info(`Recebido sinal ${signal}, encerrando graciosamente...`);
+    clearInterval(redistributionInterval);
     httpServer.close(async () => {
       await prisma.$disconnect();
       redis.disconnect();

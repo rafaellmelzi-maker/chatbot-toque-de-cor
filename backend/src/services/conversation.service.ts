@@ -1,8 +1,10 @@
 import { prisma } from '../config/database';
 import { AppError } from '../middleware/errorHandler';
 import { WhatsAppService } from './whatsapp.service';
+import { DistributionService } from './distribution.service';
 
 const whatsappService = new WhatsAppService();
+const distributionService = new DistributionService();
 
 export class ConversationService {
   async list(tenantId: string, params: { page: number; limit: number; status?: string; storeId?: string; userId?: string }) {
@@ -86,6 +88,16 @@ export class ConversationService {
     const msg = await prisma.message.create({
       data: { conversationId: id, userId, role: 'SELLER', content: message, isFromBot: false },
     });
+
+    // Quando vendedor envia primeira mensagem em conversa WAITING → transiciona para HUMAN
+    if (conv.status === 'WAITING') {
+      await prisma.conversation.update({
+        where: { id },
+        data: { status: 'HUMAN', assignedUserId: userId },
+      });
+      // Registra tempo de resposta no log de distribuição
+      distributionService.markResponded(id).catch(() => {});
+    }
 
     // Envia via WhatsApp se for canal WhatsApp
     if (conv.channel === 'WHATSAPP' && conv.whatsappPhone) {

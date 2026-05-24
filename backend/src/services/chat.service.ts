@@ -1,10 +1,12 @@
 import { prisma } from '../config/database';
 import { AIService } from './ai.service';
+import { DistributionService } from './distribution.service';
 import { AppError } from '../middleware/errorHandler';
 import { logger } from '../utils/logger';
 import { ChannelType } from '@prisma/client';
 
 const aiService = new AIService();
+const distributionService = new DistributionService();
 
 interface StartConversationParams {
   tenantId: string;
@@ -164,9 +166,13 @@ export class ChatService {
     if (!conversation || conversation.status !== 'BOT') return;
 
     // Gera resumo para o vendedor
-    const summary = await aiService.generateConversationSummary(conversationId, sessionData as Parameters<typeof aiService.generateConversationSummary>[1], []);
+    const summary = await aiService.generateConversationSummary(
+      conversationId,
+      sessionData as Parameters<typeof aiService.generateConversationSummary>[1],
+      [],
+    );
 
-    // Atualiza status para WAITING
+    // Atualiza status para WAITING e salva resumo
     await prisma.conversation.update({
       where: { id: conversationId },
       data: {
@@ -176,9 +182,10 @@ export class ChatService {
       },
     });
 
-    // Cria mensagem de transferência
+    // Envia mensagem de transferência ao cliente
     const aiConfig = await prisma.aIConfig.findUnique({ where: { tenantId } });
-    const transferMsg = aiConfig?.transferMessage ?? '✅ Conectando você com um consultor especializado!';
+    const transferMsg =
+      aiConfig?.transferMessage ?? '✅ Conectando você com um consultor especializado!';
 
     await prisma.message.create({
       data: {
@@ -189,8 +196,17 @@ export class ChatService {
       },
     });
 
-    logger.info(`Conversa ${conversationId} transferida para humano`);
+    logger.info(`[Chat] Conversa ${conversationId} transferida — iniciando distribuição automática`);
+
+    // ─── DISTRIBUIÇÃO AUTOMÁTICA ────────────────────────────────────────────
+    // Busca o melhor vendedor disponível e notifica via WhatsApp
+    setImmediate(() => {
+      distributionService.assignConversation(conversationId, tenantId).catch(err =>
+        logger.error(`[Distribution] Falha ao distribuir conversa ${conversationId}:`, err),
+      );
+    });
   }
+
 
   private async upsertLead(
     conversationId: string,

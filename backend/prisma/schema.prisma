@@ -92,11 +92,25 @@ model User {
   createdAt    DateTime @default(now())
   updatedAt    DateTime @updatedAt
 
+  // ─── Distribuição automática de leads (campos de vendedor) ────
+  isOnline            Boolean   @default(false)
+  isPaused            Boolean   @default(false)
+  pausedUntil         DateTime?
+  sellerWeight        Int       @default(1)       // 1-10: peso no round-robin
+  sellerSpecialties   String[]  @default([])      // ["residencial","premium","industrial",...]
+  maxConcurrent       Int       @default(5)       // max atendimentos simultâneos
+  performanceScore    Float     @default(5.0)     // 0-10: calculado automaticamente
+  workingHours        Json?                       // { start:"08:00", end:"18:00", days:[1,2,3,4,5] }
+  totalLeadsReceived  Int       @default(0)
+  totalLeadsConverted Int       @default(0)
+  avgResponseTimeSec  Int?
+
   tenant              Tenant         @relation(fields: [tenantId], references: [id], onDelete: Cascade)
   store               Store?         @relation(fields: [storeId], references: [id])
   assignedConversations Conversation[] @relation("AssignedSeller")
   messages            Message[]
   refreshTokens       RefreshToken[]
+  assignmentLogs      AssignmentLog[]
 
   @@unique([tenantId, email])
   @@map("users")
@@ -413,6 +427,32 @@ model WhatsAppInstance {
   store  Store?  @relation(fields: [storeId], references: [id])
 
   @@map("whatsapp_instances")
+}
+
+// ─── LOG DE DISTRIBUIÇÃO DE LEADS ────────────────────────────────
+model AssignmentLog {
+  id                   String    @id @default(uuid())
+  tenantId             String
+  conversationId       String
+  sellerId             String
+  storeId              String?
+  priority             String    @default("NORMAL")
+  projectType          String?
+  assignedAt           DateTime  @default(now())
+  respondedAt          DateTime?
+  closedAt             DateTime?
+  redistributedAt      DateTime?
+  redistributionReason String?
+  responseTimeSec      Int?
+  wasConverted         Boolean?
+  attemptNumber        Int       @default(1)
+
+  seller User @relation(fields: [sellerId], references: [id])
+
+  @@index([conversationId])
+  @@index([sellerId])
+  @@index([tenantId, assignedAt])
+  @@map("assignment_logs")
 }
 
 // ─── ENUMS ────────────────────────────────────────────────────────
