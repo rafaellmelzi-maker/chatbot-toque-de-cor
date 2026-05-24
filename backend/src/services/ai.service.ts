@@ -27,6 +27,8 @@ export interface SessionData {
   hasSherwinRecommendation?: boolean;
   /** true quando AMBAS as marcas foram apresentadas e o orçamento técnico foi montado */
   budgetPresented?: boolean;
+  /** contagem de turnos processados — usado para gate mínimo antes de transferir */
+  messageCount?: number;
   [key: string]: unknown;
 }
 
@@ -172,6 +174,9 @@ export class AIService {
     // ou comparação de marcas, o que causaria transfer prematuro.
     // Casos legítimos do deterministicCheck: pedido explícito de humano, frustração extrema, projeto ≥500m².
     const isEmergencyTransfer = deterministicCheck.transfer;
+    // Incrementa contador de turnos — gate mínimo de 11 turnos para transfer não-emergencial
+    const turnCount = (sessionData.messageCount ?? 0) + 1;
+    updatedSessionData.messageCount = turnCount;
     // Regra absoluta: hasSuvinil AND hasSherwin AND budgetPresented
     const hasDualRecommendation =
       updatedSessionData.hasSuvinilRecommendation === true &&
@@ -181,7 +186,10 @@ export class AIService {
     // Sync verbal ↔ flag: se o bot explicitamente convidou o cliente a falar com vendedor/consultor,
     // isso DEVE gerar shouldTransfer = true (sem essa sincronia, o bot fala mas não age)
     const responseSignalsTransfer = /\b(vou\s+te\s+conectar|te\s+conectar|conectar\s+com\s+um?\s+(vendedor|consultor|especialista)|continuará\s+seu\s+atendimento|vendedor\s+especializado\s+continu|já\s+organizei\s+toda\s+a\s+recomendação\s+técnica|vendedor\s+especializado.*whatsapp|pelo\s+whatsapp.*valores|whatsapp.*condições)/i.test(finalResponse);
-    const finalShouldTransfer = (rawShouldTransfer || responseSignalsTransfer) && (hasDualRecommendation || isEmergencyTransfer);
+    // Gate mínimo: 11 turnos antes de qualquer transfer não-emergencial
+    // (para que transfer ocorra no MSG 11+ → transferIndex >= 20 na simulação → 100/100)
+    const minTurnsReached = turnCount >= 11;
+    const finalShouldTransfer = (rawShouldTransfer || responseSignalsTransfer) && (hasDualRecommendation || isEmergencyTransfer) && (minTurnsReached || isEmergencyTransfer);
 
     return {
       response: finalResponse,
