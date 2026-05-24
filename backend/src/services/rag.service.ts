@@ -1,4 +1,3 @@
-import { openai, OPENAI_CONFIG } from '../config/openai';
 import { prisma } from '../config/database';
 import { logger } from '../utils/logger';
 import { AppError } from '../middleware/errorHandler';
@@ -66,89 +65,19 @@ export class RAGService {
 
   /**
    * Busca produtos semanticamente similares à query do cliente
+   * Usa busca textual inteligente (embeddings vetoriais não disponíveis)
    */
   async searchSimilarProducts(
     tenantId: string,
     query: string,
     limit = 5,
   ): Promise<EmbeddingResult[]> {
-    // Embeddings requerem OpenAI — retorna lista vazia graciosamente se indisponível
-    const { env } = await import('../config/env');
-    if (!env.OPENAI_API_KEY) {
-      return [];
-    }
     try {
-      // Gera embedding da query do usuário
-      const queryEmbeddingRes = await openai.embeddings.create({
-        model: OPENAI_CONFIG.embeddingModel,
-        input: query,
-      }).catch((err: Error) => {
-        logger.warn(`RAG embedding indisponível (${err.message}) — seguindo sem busca semântica`);
-        return null;
-      });
 
-      if (!queryEmbeddingRes) return [];
-
-      const queryEmbedding = queryEmbeddingRes;
-      const vector = JSON.stringify(queryEmbedding.data[0].embedding);
-
-      // Busca por similaridade coseno com pgvector
-      const results = await prisma.$queryRaw<
-        Array<{
-          id: string;
-          name: string;
-          description: string | null;
-          surfaces: string[];
-          environments: string[];
-          finishes: string[];
-          coverage: number | null;
-          price: number;
-          technical_data: string | null;
-          tags: string[];
-          score: number;
-        }>
-      >`
-        SELECT
-          p.id,
-          p.name,
-          p.description,
-          p.surfaces,
-          p.environments,
-          p.finishes,
-          p.coverage,
-          p.price,
-          p.technical_data,
-          p.tags,
-          1 - (p.embedding <=> ${vector}::vector) AS score
-        FROM products p
-        WHERE
-          p.tenant_id = ${tenantId}
-          AND p.is_active = true
-          AND p.embedding IS NOT NULL
-        ORDER BY p.embedding <=> ${vector}::vector
-        LIMIT ${limit}
-      `;
-
-      return results.map((r) => ({
-        productId: r.id,
-        score: r.score,
-        product: {
-          id: r.id,
-          name: r.name,
-          description: r.description,
-          surfaces: r.surfaces,
-          environments: r.environments,
-          finishes: r.finishes,
-          coverage: r.coverage,
-          price: r.price,
-          technicalData: r.technical_data,
-          tags: r.tags,
-        },
-      }));
+      return this.textFallbackSearch(tenantId, query, limit);
     } catch (err) {
       logger.error('Erro na busca RAG:', err);
-      // Fallback: busca textual simples
-      return this.textFallbackSearch(tenantId, query, limit);
+      return [];
     }
   }
 
@@ -160,26 +89,58 @@ export class RAGService {
     query: string,
     limit: number,
   ): Promise<EmbeddingResult[]> {
-    const keywords = query.toLowerCase().split(' ').filter((w) => w.length > 2);
-    if (!keywords.length) return [];
+    const stopWords = new Set(['para', 'com', 'que', 'uma', 'por', 'mais', 'como', 'mas', 'foi', 'ele', 'ela', 'dos', 'das', 'nos', 'nas']);
+    const keywords = query
+      .toLowerCase()
+      .replace(/[^a-záéíóúãõâêîôûàèìòùç\s]/g, ' ')
+      .split(/\s+/)
+      .filter((w) => w.length > 2 && !stopWords.has(w));
+
+    if (!keywords.length) {
+      // Sem keywords: retorna os N produtos mais recentes
+      const all = await prisma.product.findMany({ where: { tenantId, isActive: true }, take: limit });
+      return all.map((p) => this.toResult(p, 0.3));
+    }
+
+    // Busca em múltiplos campos para cada keyword
+    const orClauses = keywords.flatMap((kw) => [
+      { name: { contains: kw, mode: 'insensitive' as const } },
+      { description: { contains: kw, mode: 'insensitive' as const } },
+      { tags: { has: kw } },
+      { surfaces: { has: kw } },
+      { environments: { has: kw } },
+      { finishes: { has: kw } },
+      { application: { contains: kw, mode: 'insensitive' as const } },
+    ]);
 
     const products = await prisma.product.findMany({
-      where: {
-        tenantId,
-        isActive: true,
-        OR: [
-          { name: { contains: keywords[0], mode: 'insensitive' } },
-          { description: { contains: keywords[0], mode: 'insensitive' } },
-          { tags: { has: keywords[0] } },
-          { surfaces: { has: keywords[0] } },
-        ],
-      },
-      take: limit,
+      where: { tenantId, isActive: true, OR: orClauses },
+      take: limit * 3, // busca mais para re-rankar
+      include: { brand: true, category: true },
     });
 
-    return products.map((p) => ({
+    // Pontua por número de campos que batem
+    const scored = products.map((p) => {
+      let score = 0;
+      const text = `${p.name} ${p.description ?? ''} ${p.tags.join(' ')} ${p.surfaces.join(' ')} ${p.environments.join(' ')} ${p.finishes.join(' ')} ${p.application ?? ''}`.toLowerCase();
+      for (const kw of keywords) {
+        if (p.name.toLowerCase().includes(kw)) score += 3;
+        else if (text.includes(kw)) score += 1;
+      }
+      return { p, score };
+    });
+
+    scored.sort((a, b) => b.score - a.score);
+
+    return scored.slice(0, limit).map(({ p, score }) =>
+      this.toResult(p, Math.min(0.5 + score * 0.05, 0.95))
+    );
+  }
+
+  private toResult(p: { id: string; name: string; description: string | null; surfaces: string[]; environments: string[]; finishes: string[]; coverage: number | null; price: number; technicalData: string | null; tags: string[] }, score: number): EmbeddingResult {
+    return {
       productId: p.id,
-      score: 0.7,
+      score,
       product: {
         id: p.id,
         name: p.name,
@@ -192,7 +153,7 @@ export class RAGService {
         technicalData: p.technicalData,
         tags: p.tags,
       },
-    }));
+    };
   }
 
   /**
