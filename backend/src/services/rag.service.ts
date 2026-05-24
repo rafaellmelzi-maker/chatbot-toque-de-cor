@@ -79,11 +79,17 @@ export class RAGService {
     }
     try {
       // Gera embedding da query do usuário
-      const queryEmbedding = await openai.embeddings.create({
+      const queryEmbeddingRes = await openai.embeddings.create({
         model: OPENAI_CONFIG.embeddingModel,
         input: query,
+      }).catch((err: Error) => {
+        logger.warn(`RAG embedding indisponível (${err.message}) — seguindo sem busca semântica`);
+        return null;
       });
 
+      if (!queryEmbeddingRes) return [];
+
+      const queryEmbedding = queryEmbeddingRes;
       const vector = JSON.stringify(queryEmbedding.data[0].embedding);
 
       // Busca por similaridade coseno com pgvector
