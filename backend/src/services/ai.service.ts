@@ -76,8 +76,10 @@ export class AIService {
     const intent = await this.detectIntent(userMessage, messages.slice(-5));
     const updatedSessionData = { ...sessionData, ...intent.collectedData };
 
-    // 4.5. Override determinístico — não depende do LLM para transferências críticas
-    const deterministicCheck = this.checkTransferRequired(userMessage, updatedSessionData);
+    // 4.5. Override determinístico — usa sessionData (DB) para evitar contaminação do intent LLM.
+    // NÃO usar updatedSessionData aqui: o LLM pode marcar hasSherwinRecommendation=true ao ver
+    // 'Sherwin-Williams' no histórico, mesmo sem produto específico — o que dispararia block D indevidamente.
+    const deterministicCheck = this.checkTransferRequired(userMessage, sessionData);
     if (deterministicCheck.transfer) {
       intent.shouldTransfer = true;
       intent.intent = 'TRANSFERIR_HUMANO';
@@ -418,7 +420,16 @@ export class AIService {
       safe = safe.replace(pattern, 'como consultor especializado em tintas');
     }
 
-    // 4. Limite apenas para respostas extremamente longas (orçamentos técnicos completos chegam a 4000+ chars)
+    // 4. Remove preços monetários que vazaram do catálogo RAG
+    // Ex: "custa R$ 45,90 a embalagem" → substituir por frase neutra
+    safe = safe.replace(
+      /(?:custa?|vale?|por|de|ao?\s+preço\s+de|no\s+valor\s+de)?\s*R\$\s*[\d.,]+(?:\s*\/\s*(?:l|lt|litro|lata|embalagem|unidade|un|kg))?/gi,
+      '',
+    );
+    // Limpar espaços duplos gerados pela remoção
+    safe = safe.replace(/  +/g, ' ').replace(/ ([.,!?])/g, '$1').trim();
+
+    // 5. Limite apenas para respostas extremamente longas (orçamentos técnicos completos chegam a 4000+ chars)
     if (safe.length > 5000) {
       const truncated = safe.substring(0, 4800);
       const lastBreak = truncated.lastIndexOf('\n\n');
