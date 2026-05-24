@@ -66,6 +66,14 @@ export class AIService {
     const intent = await this.detectIntent(userMessage, messages.slice(-5));
     const updatedSessionData = { ...sessionData, ...intent.collectedData };
 
+    // 4.5. Override determinístico — não depende do LLM para transferências críticas
+    const deterministicCheck = this.checkTransferRequired(userMessage, updatedSessionData);
+    if (deterministicCheck.transfer) {
+      intent.shouldTransfer = true;
+      intent.intent = 'TRANSFERIR_HUMANO';
+      intent.transferReason = deterministicCheck.reason ?? intent.transferReason;
+    }
+
     // 5. Monta contexto do cliente
     const customerContext = this.buildCustomerContext(updatedSessionData);
 
@@ -199,6 +207,82 @@ export class AIService {
         shouldTransfer: false,
       };
     }
+  }
+
+  /**
+   * Verificação determinística de transferência — não depende do LLM
+   * Garante transferência para: pedidos explícitos, frustração, projetos grandes, pedidos de preço
+   */
+  private checkTransferRequired(
+    message: string,
+    sessionData: SessionData,
+  ): { transfer: boolean; reason: string | null } {
+    // A) Pedido explícito de atendimento humano
+    const humanPatterns = [
+      /quero?\s+falar\s+(com\s+)?(um\s+)?(humano|pessoa|vendedor|atendente|consultor|especialista)/i,
+      /me?\s+(passa|conecta|coloca|fala)\s+(com\s+)?(um\s+)?(humano|pessoa|vendedor|atendente|consultor)/i,
+      /(preciso|quero|gostaria|queria)\s+(de\s+)?(um\s+)?(humano|pessoa|vendedor|atendente|consultor)/i,
+      /atendimento\s+humano/i,
+      /falar\s+com\s+(algu[eé]m|gente|uma\s+pessoa)/i,
+      /vendedor?\s+humano/i,
+      /chega\s+de\s+(rob[oô]|bot|m[aá]quina|virtual)/i,
+      /quero\s+(um\s+)?humano/i,
+      /n[aã]o\s+quero\s+(mais\s+)?(rob[oô]|bot|virtual)/i,
+    ];
+    for (const p of humanPatterns) {
+      if (p.test(message)) {
+        return { transfer: true, reason: 'Pedido explícito de atendimento humano' };
+      }
+    }
+
+    // B) Frustração extrema
+    const stripped = message.replace(/\s/g, '');
+    const upperCount = (stripped.match(/[A-ZÁÉÍÓÚÀÈÌÒÙÂÊÎÔÛÃÕÇ]/g) ?? []).length;
+    const capsRatio = stripped.length > 0 ? upperCount / stripped.length : 0;
+    const exclamCount = (message.match(/!/g) ?? []).length;
+    const frustrationWords =
+      /\b(chega|basta|horr[ií]vel|p[eé]ssimo|incompetente|rid[ií]culo|absurdo|lament[aá]vel|uma\s+merda|que\s+droga)\b/i;
+
+    if (capsRatio >= 0.6 && message.replace(/\s/g, '').length > 8) {
+      return { transfer: true, reason: 'Frustração detectada — mensagem em CAPS LOCK' };
+    }
+    if (exclamCount >= 3) {
+      return { transfer: true, reason: 'Frustração detectada — múltiplas exclamações' };
+    }
+    if (frustrationWords.test(message)) {
+      return { transfer: true, reason: 'Frustração detectada — vocabulário negativo intenso' };
+    }
+
+    // C) Projeto de grande porte / corporativo
+    if (typeof sessionData.area === 'number' && sessionData.area >= 500) {
+      return { transfer: true, reason: 'Projeto de grande porte (≥ 500 m²)' };
+    }
+    const areaMatch = message.match(/(\d[\d.,]*)\s*m[²2]/i);
+    if (areaMatch) {
+      const rawNum = areaMatch[1].replace(/\./g, '').replace(',', '.');
+      const area = parseFloat(rawNum);
+      if (!isNaN(area) && area >= 500) {
+        return { transfer: true, reason: `Grande área detectada: ${area} m²` };
+      }
+    }
+    if (
+      /\b(condom[ií]nio|galp[aã]o|construtora|incorporadora|empresa|pr[eé]dio\s+inteiro|m[uú]ltiplos\s+ambientes|obra\s+comercial|grande\s+obra)\b/i.test(
+        message,
+      )
+    ) {
+      return { transfer: true, reason: 'Projeto corporativo / grande obra' };
+    }
+
+    // D) Pedido de preço ou orçamento — proibido responder, redirecionar para vendedor
+    if (
+      /\b(pre[cç]o|valor(es)?|quanto\s+(custa|fica|vale|cobram?|sai)|or[cç]amento|desconto|promo[cç][aã]o|tabela\s+de\s+pre[cç]|mais\s+barato|custo|investimento|cobram)\b/i.test(
+        message,
+      )
+    ) {
+      return { transfer: true, reason: 'Solicitação de preço ou orçamento' };
+    }
+
+    return { transfer: false, reason: null };
   }
 
   private buildCustomerContext(sessionData: SessionData): string {
