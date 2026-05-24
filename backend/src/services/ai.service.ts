@@ -124,6 +124,17 @@ export class AIService {
     // 9. Verifica guardrails
     finalResponse = this.applyGuardrails(finalResponse);
 
+    // 9.5. Anticorrosivo obrigatório para superfícies metálicas
+    if (this.isMetalSurface(userMessage) && !this.mentionsAnticorrosive(finalResponse)) {
+      finalResponse = '⚠️ Para superfície metálica é OBRIGATÓRIO usar fundo anticorrosivo antes de qualquer tinta — isso previne ferrugem e garante durabilidade!\n\n' + finalResponse;
+    }
+
+    // 9.6. Alerta para número excessivo de demãos
+    const demaoCheck = this.checkExcessiveDemaos(userMessage);
+    if (demaoCheck.excessive && !finalResponse.includes('empolamento')) {
+      finalResponse = `⚠️ Atenção: aplicar ${demaoCheck.count} demãos pode causar empolamento, descascamento e acabamento irregular. O recomendado é 2 a 3 demãos com uma tinta de qualidade — garante resultado perfeito com economia!\n\n` + finalResponse;
+    }
+
     return {
       response: finalResponse,
       intent,
@@ -302,20 +313,55 @@ export class AIService {
       : 'Informações do projeto ainda não coletadas.';
   }
 
+  private isMetalSurface(message: string): boolean {
+    return /\b(ferro|metal|portão|portao|grades?|alumín[io]+|alumin[io]+|aço|aco|metalon|estrutura\s+met[aá]l|superf[ií]cie\s+met[aá]l)/i.test(message);
+  }
+
+  private mentionsAnticorrosive(response: string): boolean {
+    return /\b(anticorrosivo|fundo\s+anticorrosivo|primer|zarc[aã]o|proteção\s+contra\s+ferrugem|fundo\s+met[aá]lico|esmalte\s+sint[eé]tico)/i.test(response);
+  }
+
+  private checkExcessiveDemaos(message: string): { excessive: boolean; count: number } {
+    const match = message.match(/\b(\d+)\s*dem[aã]os?\b/i);
+    if (match) {
+      const count = parseInt(match[1], 10);
+      if (count > 4) return { excessive: true, count };
+    }
+    return { excessive: false, count: 0 };
+  }
+
   private applyGuardrails(response: string): string {
-    // Substitui padrões que indicariam ser uma IA
+    let safe = response;
+
+    // 1. Filtro de marcas proibidas
+    if (/\b(coral|lukscolor|hydronorth|novotex|eucatex|renner|novacor|palmares)\b/i.test(safe)) {
+      return 'Aqui na Toque de Cor trabalhamos exclusivamente com Suvinil e Sherwin-Williams — marcas premium com produtos de alta qualidade para qualquer projeto. Como posso te ajudar a encontrar a opção ideal?';
+    }
+
+    // 2. Filtro de exposição do system prompt
+    const safeLower = safe.toLowerCase();
+    const promptLeaks = [
+      'você é o tintor, assistente virtual especializado',
+      'vendedor técnico experiente',
+      'primeiras 100 palavras das minhas instruções',
+      'primeiras 50 palavras',
+    ];
+    if (promptLeaks.some((p) => safeLower.includes(p))) {
+      return 'Sou o TINTOR, especialista em tintas Suvinil e Sherwin-Williams da Toque de Cor! Como posso ajudar com seu projeto?';
+    }
+
+    // 3. Substitui padrões que indicariam ser uma IA
     const aiPatterns = [
       /como (um|uma) (modelo de linguagem|ia|inteligência artificial|assistente virtual)/gi,
       /sou (um|uma) (ia|inteligência artificial|robô|bot)/gi,
       /não (tenho|possuo) (consciência|sentimentos|emoções) reais/gi,
     ];
 
-    let safe = response;
     for (const pattern of aiPatterns) {
       safe = safe.replace(pattern, 'como consultor especializado em tintas');
     }
 
-    // Limita tamanho para não sobrecarregar o WhatsApp
+    // 4. Limita tamanho para não sobrecarregar o WhatsApp
     if (safe.length > 1500) {
       const truncated = safe.substring(0, 1400);
       const lastSentence = truncated.lastIndexOf('. ');
