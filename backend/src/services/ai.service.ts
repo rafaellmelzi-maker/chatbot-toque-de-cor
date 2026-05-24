@@ -348,7 +348,9 @@ export class AIService {
 
   /** Detecta presença de recomendação Sherwin-Williams na resposta (produto ou marca específica) */
   private responseHasSherwin(response: string): boolean {
-    return /(?:🎨\s*)?(?:OPÇÃO\s+)?SHERWIN[-\s]WILLIAMS\s*[:\-—–]|(?:OPÇÃO\s+)?(?:SW|SHERWIN)\s*[:\-—–]|\bMETALATEX\b|\bLOXON\b|\bHARMONY\b|\bNOVACRYLIC\b|\bKEM\s+TONE\b|\bLUXO\s+BRILHO\b/i.test(response);
+    // CUIDADO: não usar SHERWIN\s*[:\-] pois captura o hífen de "Sherwin-Williams" (falso positivo).
+    // Usar SHERWIN[-\s]WILLIAMS\s*[:—–] (só travessão/dois-pontos após o nome completo) ou nomes de produto.
+    return /SHERWIN[-\s]WILLIAMS\s*[:—–]|OPÇÃO\s+SHERWIN|🎨\s*OPÇÃO\s+SHERWIN|\bSW\s*[:—–]|\bMETALATEX\b|\bLOXON\b|\bHARMONY\b|\bNOVACRYLIC\b|\bKEM\s+TONE\b|\bLUXO\s+BRILHO\b/i.test(response);
   }
 
   private buildCustomerContext(sessionData: SessionData): string {
