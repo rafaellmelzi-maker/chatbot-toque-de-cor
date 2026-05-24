@@ -160,10 +160,11 @@ export class AIService {
     }
 
     // 10. Transferência é permitida SOMENTE após apresentar AMBAS as marcas, exceto emergências
-    const isEmergencyTransfer =
-      intent.intent === 'TRANSFERIR_HUMANO' ||
-      intent.intent === 'RECLAMACAO' ||
-      intent.intent === 'RECLAMAÇÃO';
+    // isEmergencyTransfer: APENAS da verificação determinística (server-side) — NÃO do intent LLM.
+    // O intent LLM pode classificar TRANSFERIR_HUMANO incorretamente para perguntas de custo-benefício
+    // ou comparação de marcas, o que causaria transfer prematuro.
+    // Casos legítimos do deterministicCheck: pedido explícito de humano, frustração extrema, projeto ≥500m².
+    const isEmergencyTransfer = deterministicCheck.transfer;
     // Regra absoluta: hasSuvinil AND hasSherwin AND budgetPresented
     const hasDualRecommendation =
       updatedSessionData.hasSuvinilRecommendation === true &&
