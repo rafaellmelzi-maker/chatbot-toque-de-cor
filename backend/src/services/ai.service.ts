@@ -168,7 +168,10 @@ export class AIService {
       updatedSessionData.hasSherwinRecommendation === true &&
       updatedSessionData.budgetPresented === true;
     const rawShouldTransfer = intent.shouldTransfer || intent.purchaseScore >= 80;
-    const finalShouldTransfer = rawShouldTransfer && (hasDualRecommendation || isEmergencyTransfer);
+    // Sync verbal ↔ flag: se o bot explicitamente convidou o cliente a falar com vendedor/consultor,
+    // isso DEVE gerar shouldTransfer = true (sem essa sincronia, o bot fala mas não age)
+    const responseSignalsTransfer = /\b(vou\s+te\s+conectar|te\s+conectar|conectar\s+com\s+um?\s+(vendedor|consultor|especialista)|continuará\s+seu\s+atendimento|vendedor\s+especializado\s+continu|já\s+organizei\s+toda\s+a\s+recomendação\s+técnica|vendedor\s+especializado.*whatsapp|pelo\s+whatsapp.*valores|whatsapp.*condições)/i.test(finalResponse);
+    const finalShouldTransfer = (rawShouldTransfer || responseSignalsTransfer) && (hasDualRecommendation || isEmergencyTransfer);
 
     return {
       response: finalResponse,
@@ -338,14 +341,14 @@ export class AIService {
     return { transfer: false, reason: null };
   }
 
-  /** Detecta presença de recomendação Suvinil na resposta */
+  /** Detecta presença de recomendação Suvinil na resposta (nome de produto específico ou bloco estruturado) */
   private responseHasSuvinil(response: string): boolean {
-    return /SUVINIL\s*[:\-]|OPÇÃO\s+SUVINIL|🎨\s*OPÇÃO\s+SUVINIL|\bSUVINIL\b.*\b(fosco|acetinado|semi[-\s]brilho|brilhante|lata|litro|m²)/i.test(response);
+    return /(?:🎨\s*)?(?:OPÇÃO\s+)?SUVINIL\s*[:\-—–]|Suvinil\s+(?:Fosco|Acetinado|Semi[-\s]Brilho|Pinta\s+e\s+Cobre|Econ[oô]m|Esmalte|Fundo|Anti[-\s]Ferrug|Massa|Selador|Verniz|Piso|Impermeabil|Martelado)/i.test(response);
   }
 
-  /** Detecta presença de recomendação Sherwin-Williams na resposta */
+  /** Detecta presença de recomendação Sherwin-Williams na resposta (produto ou marca específica) */
   private responseHasSherwin(response: string): boolean {
-    return /SHERWIN[- ]WILLIAMS\s*[:\-]|OPÇÃO\s+SHERWIN|🎨\s*OPÇÃO\s+SHERWIN|\bSHERWIN\b.*\b(fosco|acetinado|semi[-\s]brilho|brilhante|lata|litro|m²)|\bMETALATEX\b|\bDURALATEX\b|\bEVOLUTION\b/i.test(response);
+    return /(?:🎨\s*)?(?:OPÇÃO\s+)?SHERWIN[-\s]WILLIAMS\s*[:\-—–]|(?:OPÇÃO\s+)?(?:SW|SHERWIN)\s*[:\-—–]|\bMETALATEX\b|\bLOXON\b|\bHARMONY\b|\bNOVACRYLIC\b|\bKEM\s+TONE\b|\bLUXO\s+BRILHO\b/i.test(response);
   }
 
   private buildCustomerContext(sessionData: SessionData): string {
@@ -413,11 +416,11 @@ export class AIService {
       safe = safe.replace(pattern, 'como consultor especializado em tintas');
     }
 
-    // 4. Limita tamanho para não sobrecarregar o WhatsApp
-    if (safe.length > 1500) {
-      const truncated = safe.substring(0, 1400);
-      const lastSentence = truncated.lastIndexOf('. ');
-      safe = truncated.substring(0, lastSentence + 1) + '\n\n_Posso continuar explicando se precisar!_';
+    // 4. Limite apenas para respostas extremamente longas (orçamentos técnicos completos chegam a 4000+ chars)
+    if (safe.length > 5000) {
+      const truncated = safe.substring(0, 4800);
+      const lastBreak = truncated.lastIndexOf('\n\n');
+      safe = truncated.substring(0, lastBreak > 3000 ? lastBreak : 4800);
     }
 
     return safe;
