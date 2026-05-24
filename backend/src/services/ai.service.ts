@@ -169,11 +169,10 @@ export class AIService {
     }
 
     // 10. Transferência é permitida SOMENTE após apresentar AMBAS as marcas, exceto emergências
-    // isEmergencyTransfer: APENAS da verificação determinística (server-side) — NÃO do intent LLM.
-    // O intent LLM pode classificar TRANSFERIR_HUMANO incorretamente para perguntas de custo-benefício
-    // ou comparação de marcas, o que causaria transfer prematuro.
-    // Casos legítimos do deterministicCheck: pedido explícito de humano, frustração extrema, projeto ≥500m².
-    const isEmergencyTransfer = deterministicCheck.transfer;
+    // isEmergencyTransfer: APENAS casos A/B/C do deterministicCheck (humano explícito, frustração, grande obra)
+    // Section D (preço após dual-brand) NÃO é emergência — deve respeitar o gate mínimo de turnos
+    const DUAL_BRAND_REASON = 'Recomendação dual-brand completa — encaminhando para vendedor';
+    const isEmergencyTransfer = deterministicCheck.transfer && deterministicCheck.reason !== DUAL_BRAND_REASON;
     // Incrementa contador de turnos — gate mínimo de 11 turnos para transfer não-emergencial
     const turnCount = (sessionData.messageCount ?? 0) + 1;
     updatedSessionData.messageCount = turnCount;
@@ -346,10 +345,11 @@ export class AIService {
     }
 
     // D) Pedido de preço — só transfere quando AMBAS as marcas foram apresentadas (regra dual-brand)
+    // Nota: 'custo' removido para evitar falso positivo em 'custo-benefício'
     if (
       sessionData.hasSuvinilRecommendation === true &&
       sessionData.hasSherwinRecommendation === true &&
-      /\b(pre[cç]o|valor(es)?|quanto\s+(custa|fica|vale|cobram?|sai)|or[cç]amento|desconto|promo[cç][aã]o|tabela\s+de\s+pre[cç]|mais\s+barato|custo|investimento|cobram)\b/i.test(
+      /\b(pre[cç]o|valor(es)?|quanto\s+(custa|fica|vale|cobram?|sai)|or[cç]amento|desconto|promo[cç][aã]o|tabela\s+de\s+pre[cç]|mais\s+barato|investimento|cobram)\b/i.test(
         message,
       )
     ) {
