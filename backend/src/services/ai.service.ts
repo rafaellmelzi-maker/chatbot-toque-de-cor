@@ -21,7 +21,11 @@ export interface SessionData {
   projectType?: string;
   surfaceState?: string;
   customerName?: string;
-  hasRecommendation?: boolean;
+  /** true quando o bot já apresentou produto(s) Suvinil nesta conversa */
+  hasSuvinilRecommendation?: boolean;
+  /** true quando o bot já apresentou produto(s) Sherwin-Williams nesta conversa */
+  hasSherwinRecommendation?: boolean;
+  /** true quando AMBAS as marcas foram apresentadas e o orçamento técnico foi montado */
   budgetPresented?: boolean;
   [key: string]: unknown;
 }
@@ -29,7 +33,10 @@ export interface SessionData {
 interface IntentAnalysis {
   intent: 'COMPRA' | 'DUVIDA_TECNICA' | 'ORCAMENTO' | 'TRANSFERIR_HUMANO' | 'RECLAMACAO' | 'OUTRO'
         | 'DÚVIDA_TÉCNICA' | 'ORÇAMENTO' | 'RECLAMAÇÃO'; // aliases com acentos para compatibilidade
-  collectedData: Partial<SessionData>;
+  collectedData: Partial<SessionData> & {
+    hasSuvinilRecommendation?: boolean | null;
+    hasSherwinRecommendation?: boolean | null;
+  };
   purchaseScore: number;
   shouldTransfer: boolean;
   transferReason?: string;
@@ -138,20 +145,30 @@ export class AIService {
       finalResponse = `⚠️ Atenção: aplicar ${demaoCheck.count} demãos pode causar empolamento, descascamento e acabamento irregular. O recomendado é 2 a 3 demãos com uma tinta de qualidade — garante resultado perfeito com economia!\n\n` + finalResponse;
     }
 
-    // 9.7. Detecta se a resposta contém recomendação técnica completa com as duas marcas
-    if (this.responseContainsRecommendation(finalResponse)) {
-      updatedSessionData.hasRecommendation = true;
+    // 9.7. Detecta marcas apresentadas na resposta — gate dual-brand obrigatório
+    if (this.responseHasSuvinil(finalResponse)) {
+      updatedSessionData.hasSuvinilRecommendation = true;
+    }
+    if (this.responseHasSherwin(finalResponse)) {
+      updatedSessionData.hasSherwinRecommendation = true;
+    }
+    // Orçamento técnico apresentado = AMBAS as marcas presentes
+    if (updatedSessionData.hasSuvinilRecommendation && updatedSessionData.hasSherwinRecommendation) {
       updatedSessionData.budgetPresented = true;
     }
 
-    // 10. Transferência é permitida SOMENTE após recomendação apresentada, exceto emergências
+    // 10. Transferência é permitida SOMENTE após apresentar AMBAS as marcas, exceto emergências
     const isEmergencyTransfer =
       intent.intent === 'TRANSFERIR_HUMANO' ||
       intent.intent === 'RECLAMACAO' ||
       intent.intent === 'RECLAMAÇÃO';
-    const hasRec = updatedSessionData.hasRecommendation === true;
+    // Regra absoluta: hasSuvinil AND hasSherwin AND budgetPresented
+    const hasDualRecommendation =
+      updatedSessionData.hasSuvinilRecommendation === true &&
+      updatedSessionData.hasSherwinRecommendation === true &&
+      updatedSessionData.budgetPresented === true;
     const rawShouldTransfer = intent.shouldTransfer || intent.purchaseScore >= 80;
-    const finalShouldTransfer = rawShouldTransfer && (hasRec || isEmergencyTransfer);
+    const finalShouldTransfer = rawShouldTransfer && (hasDualRecommendation || isEmergencyTransfer);
 
     return {
       response: finalResponse,
@@ -307,28 +324,28 @@ export class AIService {
       return { transfer: true, reason: 'Projeto corporativo / grande obra' };
     }
 
-    // D) Pedido de preço ou orçamento — só transfere APÓS recomendação técnica ter sido apresentada
+    // D) Pedido de preço — só transfere quando AMBAS as marcas foram apresentadas (regra dual-brand)
     if (
-      sessionData.hasRecommendation === true &&
+      sessionData.hasSuvinilRecommendation === true &&
+      sessionData.hasSherwinRecommendation === true &&
       /\b(pre[cç]o|valor(es)?|quanto\s+(custa|fica|vale|cobram?|sai)|or[cç]amento|desconto|promo[cç][aã]o|tabela\s+de\s+pre[cç]|mais\s+barato|custo|investimento|cobram)\b/i.test(
         message,
       )
     ) {
-      return { transfer: true, reason: 'Orçamento técnico já apresentado — encaminhando para vendedor' };
+      return { transfer: true, reason: 'Recomendação dual-brand completa — encaminhando para vendedor' };
     }
 
     return { transfer: false, reason: null };
   }
 
-  /**
-   * Detecta se a resposta do bot contém uma recomendação técnica completa (orçamento pronto)
-   */
-  private responseContainsRecommendation(response: string): boolean {
-    const suvinilMention = /SUVINIL\s*:|OPÇÃO\s+SUVINIL|🎨\s*OPÇÃO\s+SUVINIL/i.test(response);
-    const swMention = /SHERWIN[- ]WILLIAMS\s*:|OPÇÃO\s+SHERWIN|🎨\s*OPÇÃO\s+SHERWIN/i.test(response);
-    const budgetMention = /📋\s*RESUMO\s+DO\s+PROJETO|RESUMO\s+DO\s+PROJETO|orçamento\s+técnico|recomendação\s+técnica\s+completa|Já\s+organizei\s+toda/i.test(response);
-    // Transfere quando apresentou ambas as marcas OU quando há um orçamento técnico estruturado
-    return (suvinilMention && swMention) || budgetMention;
+  /** Detecta presença de recomendação Suvinil na resposta */
+  private responseHasSuvinil(response: string): boolean {
+    return /SUVINIL\s*[:\-]|OPÇÃO\s+SUVINIL|🎨\s*OPÇÃO\s+SUVINIL|\bSUVINIL\b.*\b(fosco|acetinado|semi[-\s]brilho|brilhante|lata|litro|m²)/i.test(response);
+  }
+
+  /** Detecta presença de recomendação Sherwin-Williams na resposta */
+  private responseHasSherwin(response: string): boolean {
+    return /SHERWIN[- ]WILLIAMS\s*[:\-]|OPÇÃO\s+SHERWIN|🎨\s*OPÇÃO\s+SHERWIN|\bSHERWIN\b.*\b(fosco|acetinado|semi[-\s]brilho|brilhante|lata|litro|m²)|\bMETALATEX\b|\bDURALATEX\b|\bEVOLUTION\b/i.test(response);
   }
 
   private buildCustomerContext(sessionData: SessionData): string {
