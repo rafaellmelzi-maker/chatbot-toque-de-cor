@@ -201,7 +201,7 @@ function avaliar(conversas) {
     },
     {
       // Tratamento de mofo ANTES da pintura (sequência correta)
-      regex: /tratar.{0,40}mofo.{0,80}pintar|remov.{0,30}mofo.{0,60}ap[oó]s|primer.{0,30}ap[oó]s.{0,30}mofo|limpar.{0,50}mofo|antes.{0,40}pintar.{0,40}mofo|mofo.{0,40}antes/i,
+      regex: /tratar.{0,40}mofo.{0,80}pintar|remov.{0,30}mofo.{0,60}ap[oó]s|primer.{0,30}ap[oó]s.{0,30}mofo|limpar.{0,50}mofo|limpeza.{0,50}mofo|tratamento.{0,30}mofo|antes.{0,40}pintar.{0,40}mofo|mofo.{0,40}antes|secar.{0,60}antes.{0,60}(tinta|pintar)/i,
       ok: '✅ Sequência correta: tratar mofo ANTES de pintar',
       fail: '⚠️ Não deixou claro que mofo deve ser tratado ANTES da tinta',
     },
