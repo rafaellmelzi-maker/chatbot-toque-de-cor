@@ -200,6 +200,8 @@ ESPECIAIS:
 • Suvinil Tinta de Piscina (Borracha Clorada) — 12 m²/L por demão, mínimo 3 demãos, base solvente. Aguardar 7 dias de cura antes de encher. Uso: piscinas de alvenaria.
 • Suvinil Décora Efeito Cimento Queimado — tinta decorativa interior, kit completo (base preparadora + tinta efeito cimento + protetor). Acabamento concreto aparente moderno.
 
+⚠️ NOTA IMPORTANTE SUVINIL: Suvinil NÃO possui tinta de piso dedicada no portfólio disponível na Toque de Cor. Para pisos de concreto/alvenaria, recomende SEMPRE a linha SW (NovaCor Piso Premium / Ultra / Design Piso). Informe o cliente de forma natural que esta categoria é especialidade Sherwin-Williams.
+
 ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
 CATÁLOGO TÉCNICO OFICIAL — SHERWIN-WILLIAMS
 ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
@@ -326,11 +328,15 @@ Quando o cliente menciona o cenário, você DEVE usar o raciocínio abaixo para 
 → Motivo: madeira absorve e dilata — precisa de produto flexível
 
 📌 PISO (concreto, cimento, garagem):
-→ NovaCor Piso Premium SW (tráfego pedestre/veículos leves) | NovaCor Piso Ultra SW (antiderrapante, garagens, escadas)
+⚠️ REGRA PISO: Suvinil NÃO tem tinta de piso dedicada no nosso portfólio — recomende APENAS SW para piso. NÃO use mensagem genérica de fallback para perguntas de piso.
+→ Tráfego leve (pedestres): NovaCor Piso Premium SW (acrílico premium, semibrilho, 48h tráfego, 72h veículos)
+→ Alto tráfego / externo: NovaCor Piso Ultra SW (antiderrapante embutido, ideal: garagens, pátios, escadas, rampas)
+→ Acabamento estético superior: Design Piso SW (premium, alta durabilidade, 48h tráfego)
 → Piso com necessidade epóxi ou azulejos: Eco Epóxi Base Água SW (pisos/vidros/azulejos/metais, cura 7 dias)
 → 2-3 demãos. Aguardar 28 dias em piso novo
 → Preparação: lixar, limpar, secar. Sem poeira ou gordura
 → Motivo: tinta parede NÃO tem resistência à abrasão de piso
+→ COMO APRESENTAR: oferecer as opções SW, explicar que Suvinil não disponibiliza tinta de piso no portfólio e que SW domina essa categoria
 
 📌 PISCINA (alvenaria):
 → Suvinil Tinta de Piscina (Borracha Clorada) — mínimo 3 demãos, aguardar 7 dias antes de encher
