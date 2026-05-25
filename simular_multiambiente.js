@@ -175,8 +175,19 @@ function avaliar(conversas) {
       fail: '❌ NÃO recomendou produto adequado para piso externo/alto tráfego',
     },
     {
-      // Verificação NEGATIVA: não deve recomendar massa corrida/lisa em fachada
-      regex: /massa corrida.{0,80}fachada|fachada.{0,80}massa corrida|massa corrida.{0,80}externo|externo.{0,80}massa corrida/i,
+      // Verificação NEGATIVA: não deve RECOMENDAR massa corrida em fachada (exclui proibições/negações)
+      test: (txt) => {
+        const re = /massa corrida.{0,80}fachada|fachada.{0,80}massa corrida|massa corrida.{0,80}externo|externo.{0,80}massa corrida/gi;
+        let m;
+        while ((m = re.exec(txt)) !== null) {
+          const snippet = txt.slice(Math.max(0, m.index - 60), m.index + m[0].length + 15);
+          // Se há negação no contexto, é uma proibição correta (não é erro)
+          if (!/(nunca|jamais|n[ãa]o|NÃO|NUNCA|proibid|somente\s+intern|apenas\s+intern|uso\s+intern|exclusiv)/i.test(snippet)) {
+            return true; // recomendação positiva = erro
+          }
+        }
+        return false;
+      },
       invertido: true,
       ok: '✅ NÃO recomendou massa corrida em fachada (correto)',
       fail: '❌ Recomendou massa corrida em fachada — erro técnico grave',
@@ -197,7 +208,7 @@ function avaliar(conversas) {
   ];
 
   for (const chk of tecChecks) {
-    const match = chk.regex.test(full);
+    const match = chk.test ? chk.test(full) : chk.regex.test(full);
     const passed = chk.invertido ? !match : match;
     if (passed) {
       cr.tecnica.score += 12.5;
@@ -639,7 +650,15 @@ async function main() {
   printSection('🔍 VALIDAÇÕES CRÍTICAS DE PRODUTO');
 
   const crits = [
-    { desc: 'NÃO massa corrida em fachada',   ok: !/massa corrida.{0,80}fachada|fachada.{0,80}massa corrida/i.test(full) },
+    { desc: 'NÃO massa corrida em fachada',   ok: !(() => {
+        const re = /massa corrida.{0,80}fachada|fachada.{0,80}massa corrida/gi;
+        let m;
+        while ((m = re.exec(full)) !== null) {
+          const snippet = full.slice(Math.max(0, m.index - 60), m.index + m[0].length + 15);
+          if (!/(nunca|jamais|n[ãa]o|NÃO|NUNCA|proibid|somente\s+intern|apenas\s+intern|uso\s+intern|exclusiv)/i.test(snippet)) return true;
+        }
+        return false;
+      })() },
     { desc: 'NÃO tinta interna em fachada',   ok: !/tinta.{0,20}interna.{0,80}fachada|fachada.{0,80}tinta.{0,20}interna/i.test(full) },
     { desc: 'Anticorrosivo no metal',          ok: /anticorrosivo|fundo.{0,15}anti.?ferrug|primer.{0,20}metal/i.test(full) },
     { desc: 'Verniz na madeira',               ok: /verniz/i.test(full) },
