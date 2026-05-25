@@ -380,7 +380,7 @@ export class DistributionService {
         });
         await prisma.conversation.update({
           where: { id: conv.id },
-          data: { status: 'CLOSED', assignedUserId: null },
+          data: { status: 'ABANDONED', assignedUserId: null },
         });
         continue;
       }
