@@ -8,6 +8,12 @@ const whatsappService = new WhatsAppService();
 /** Tempo limite para resposta do vendedor antes de redistribuir (5 min) */
 const ASSIGNMENT_TIMEOUT_MS = 5 * 60 * 1000;
 
+/** Número máximo de redistribuições antes de abandonar a conversa */
+const MAX_REDISTRIBUTION_ATTEMPTS = 3;
+
+/** Máximo de conversas redistribuídas por ciclo de 30s (evita flood de notificações) */
+const MAX_REDISTRIBUTIONS_PER_CYCLE = 5;
+
 type SellerSelectionParams = {
   tenantId: string;
   storeId: string;
@@ -342,6 +348,7 @@ export class DistributionService {
     const cutoff = new Date(Date.now() - ASSIGNMENT_TIMEOUT_MS);
 
     // Busca conversas WAITING com assignedUser e transferredAt antigo
+    // Limita a MAX_REDISTRIBUTIONS_PER_CYCLE para evitar flood de notificações
     const stale = await prisma.conversation.findMany({
       where: {
         status: 'WAITING',
@@ -349,6 +356,7 @@ export class DistributionService {
         transferredAt: { lt: cutoff },
       },
       include: { customer: true },
+      take: MAX_REDISTRIBUTIONS_PER_CYCLE,
     });
 
     for (const conv of stale) {
@@ -361,8 +369,24 @@ export class DistributionService {
       if (!lastLog || lastLog.respondedAt || lastLog.redistributedAt) continue;
       if (lastLog.assignedAt >= cutoff) continue; // ainda dentro do prazo
 
+      // Verifica se já atingiu o limite máximo de tentativas
+      if (lastLog.attemptNumber >= MAX_REDISTRIBUTION_ATTEMPTS) {
+        logger.warn(
+          `[Distribution] Conversa ${conv.id} atingiu limite de ${MAX_REDISTRIBUTION_ATTEMPTS} tentativas — marcando como ABANDONED`,
+        );
+        await prisma.assignmentLog.update({
+          where: { id: lastLog.id },
+          data: { redistributedAt: new Date(), redistributionReason: 'MAX_ATTEMPTS_REACHED' },
+        });
+        await prisma.conversation.update({
+          where: { id: conv.id },
+          data: { status: 'CLOSED', assignedUserId: null },
+        });
+        continue;
+      }
+
       logger.info(
-        `[Distribution] Timeout: redistribuindo conversa ${conv.id} do vendedor ${lastLog.sellerId}`,
+        `[Distribution] Timeout: redistribuindo conversa ${conv.id} do vendedor ${lastLog.sellerId} (tentativa ${lastLog.attemptNumber})`,
       );
 
       // Marca log atual como redistribuído
