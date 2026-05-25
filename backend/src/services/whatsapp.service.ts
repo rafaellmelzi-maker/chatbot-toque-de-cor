@@ -2,6 +2,7 @@ import { prisma } from '../config/database';
 import { AppError } from '../middleware/errorHandler';
 import { logger } from '../utils/logger';
 import { env } from '../config/env';
+import { redis } from '../config/redis';
 
 const EVOLUTION_BASE = env.EVOLUTION_API_URL;
 const EVOLUTION_KEY = env.EVOLUTION_API_KEY;
@@ -54,6 +55,17 @@ export class WhatsAppService {
 
     const remoteJid = key?.remoteJid as string;
     if (!remoteJid || remoteJid.includes('@g.us')) return; // ignora grupos
+
+    // Deduplicação: ignora messageId já processado (Evolution API pode entregar duplicatas)
+    const messageId = key?.id as string;
+    if (messageId) {
+      const dedupKey = `wa:msg:${messageId}`;
+      const already = await redis.set(dedupKey, '1', 'EX', 120, 'NX'); // TTL 2 min, NX = só se não existe
+      if (!already) {
+        logger.warn(`[WhatsApp] Mensagem duplicada ignorada: ${messageId}`);
+        return;
+      }
+    }
 
     const phone = remoteJid.replace('@s.whatsapp.net', '');
     const text =

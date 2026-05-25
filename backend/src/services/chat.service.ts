@@ -162,8 +162,17 @@ export class ChatService {
   }
 
   private async initiateTransfer(conversationId: string, tenantId: string, sessionData: object) {
-    const conversation = await prisma.conversation.findUnique({ where: { id: conversationId } });
-    if (!conversation || conversation.status !== 'BOT') return;
+    // Atualização atômica: só prossegue se status ainda for 'BOT'.
+    // Isso evita race condition com webhooks duplicados da Evolution API.
+    const updated = await prisma.conversation.updateMany({
+      where: { id: conversationId, status: 'BOT' },
+      data: { status: 'WAITING', transferredAt: new Date() },
+    });
+
+    if (updated.count === 0) {
+      logger.warn(`[Chat] initiateTransfer ignorado para ${conversationId} — já transferido ou não encontrado`);
+      return;
+    }
 
     // Gera resumo para o vendedor
     const summary = await aiService.generateConversationSummary(
@@ -172,14 +181,10 @@ export class ChatService {
       [],
     );
 
-    // Atualiza status para WAITING e salva resumo
+    // Persiste o resumo gerado
     await prisma.conversation.update({
       where: { id: conversationId },
-      data: {
-        status: 'WAITING',
-        transferredAt: new Date(),
-        summary: JSON.stringify(summary),
-      },
+      data: { summary: JSON.stringify(summary) },
     });
 
     // Envia mensagem de transferência ao cliente
