@@ -182,7 +182,7 @@ function avaliar(conversas) {
         while ((m = re.exec(txt)) !== null) {
           const snippet = txt.slice(Math.max(0, m.index - 60), m.index + m[0].length + 15);
           // Se há negação no contexto, é uma proibição correta (não é erro)
-          if (!/(nunca|jamais|n[ãa]o|NÃO|NUNCA|proibid|somente\s+intern|apenas\s+intern|uso\s+intern|exclusiv)/i.test(snippet)) {
+          if (!/(nunca|jamais|n[ãa]o|NÃO|NUNCA|proibid|somente\s+intern|apenas\s+intern|uso\s+intern|exclusiv|para\s+intern|intern[a-z]*[\/,]\s*extern)/i.test(snippet)) {
             return true; // recomendação positiva = erro
           }
         }
@@ -439,7 +439,7 @@ function avaliar(conversas) {
   if (transferIdx === -1) {
     cr.transferencia.notas.push('⚠️ Transferência não ocorreu durante a simulação');
     cr.transferencia.score = 40;
-  } else if (transferIdx >= 30) {  // msg 15+ (índice par = user, ímpar = bot; msg N = índice 2N-1)
+  } else if (transferIdx >= 29) {  // msg 15+ bot response (index 29 = bot MSG 15, 31 = bot MSG 16...)
     cr.transferencia.score = 100;
     cr.transferencia.notas.push(`✅ Transferência no momento correto (msg ${Math.ceil(transferIdx / 2)})`);
   } else if (transferIdx >= 20) {  // msg 10-14
