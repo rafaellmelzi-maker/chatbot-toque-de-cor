@@ -409,7 +409,7 @@ export class AIService {
     let safe = response;
 
     // 1. Filtro de marcas proibidas
-    if (/\b(coral|lukscolor|hydronorth|novotex|eucatex|renner|novacor|palmares)\b/i.test(safe)) {
+    if (/\b(coral|lukscolor|hydronorth|novotex|eucatex|renner|palmares)\b/i.test(safe)) {
       return 'Aqui na Toque de Cor trabalhamos exclusivamente com Suvinil e Sherwin-Williams — marcas premium com produtos de alta qualidade para qualquer projeto. Como posso te ajudar a encontrar a opção ideal?';
     }
 
